@@ -13,6 +13,14 @@ audio, IDs, or presentation merely because they exist here. Do not reproduce
 another game’s distinctive mechanics or presentation by using this template as
 a copy-paste source.
 
+Every ship-track game derived from this template must implement both purchase
+monetization and ads. Infer the best products, value, ad formats, placements,
+timing, limits, and presentation from that game's audience, loop, economy,
+progression, session shape, and natural breaks. Do not copy the template's
+example offers or stop at SDK wrappers, placeholders, disabled UI, diagnostics,
+or recommendations. A prototype may defer both until ship-track promotion, and
+an explicit owner instruction may narrow or override the model.
+
 Keep lifecycle, safe-area, accessibility, persistence, capability-gated RUN
 integration, authoritative outcomes, and cleanup generic. Do not duplicate
 those application services per renderer. A hybrid game uses one frame clock,

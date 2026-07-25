@@ -1,5 +1,25 @@
 # Day-zero monetization brief
 
+## Required derived-game outcome
+
+Every ship-track game derived from this template must implement both:
+
+1. at least one genuine, player-facing purchase product; and
+2. at least one genuine, player-facing ad placement.
+
+The implementing AI chooses the products, value, price hypothesis, ad formats,
+placements, timing, caps, eligibility, and presentation that best fit the
+game's audience, core loop, economy, progression, session shape, and natural
+breaks. Rewarded ads, interstitials, or both are valid; do not force every
+format into every game. Do not copy Pixel Foundry's examples and do not treat
+SDK seams, placeholder IDs, disabled cards, hidden diagnostics, or a list of
+recommendations as implementation.
+
+This open-source template itself remains fail-closed because it has no derived
+game, live catalog, or production IDs. A prototype may defer both channels
+until ship-track promotion, and an explicit owner instruction may narrow or
+override the model.
+
 - Model: hybrid-capable foundation, disabled by default.
 - Non-payer promise: the complete core loop, progression, daily rewards, and quests remain playable without ads or purchases.
 - Value moment: the Feature Lab is a developer-facing reference surface and

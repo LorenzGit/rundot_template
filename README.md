@@ -3,6 +3,14 @@
 A renderer-flexible RUN.world game foundation and knowledge base for PixiJS,
 Three.js, or a deliberate combination of both.
 
+For any ship-track game derived from this repository, **purchase monetization
+and ads are both required**. The implementing AI should inspect the game's
+audience, loop, economy, progression, session shape, and natural breaks, then
+choose and build the products, rewards, ad formats, placements, timing, limits,
+and presentation that fit that game. The template's examples are knowledge, not
+a catalog or ad plan to copy. Prototypes may defer both until promotion, and an
+explicit owner instruction may narrow or override the model.
+
 ## RUN.world CLI and SDK
 
 This template uses two separate RUN.world tools. The **`rundot` CLI** is the
