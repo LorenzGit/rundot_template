@@ -1,4 +1,7 @@
-# RUN Pixi WebGPU template
+# rundot_template
+
+A renderer-flexible RUN.world game foundation and knowledge base for PixiJS,
+Three.js, or a deliberate combination of both.
 
 ## RUN.world CLI and SDK
 
@@ -150,11 +153,12 @@ excluded or privileged patterns live in
 
 ---
 
-A small, production-minded, portrait-first starter for 2D RUN.world games with
-a complete landscape-safe layout. The default app is deliberately ordinary:
-React 19 UI, PixiJS 8 with WebGPU-first/WebGL fallback, generated WebAudio,
-strict TypeScript, versioned saves, localization, daily systems, and fail-closed
-RUN integrations.
+A small, production-minded RUN.world foundation with a complete,
+landscape-safe layout. The default app is deliberately a simple 2D Pixi demo,
+while a lazy Rendering Lab demonstrates a Three-only world/UI and a layered
+Three-world + Pixi-UI composition. React 19, strict TypeScript, generated
+WebAudio, versioned saves, localization, daily systems, and fail-closed RUN
+integrations remain shared rather than being duplicated per renderer.
 
 <p align="center">
   <img src="./image.png" alt="Pixel Foundry template main menu running in a portrait mobile viewport" width="386">
@@ -166,14 +170,41 @@ can navigate away, spend value, mutate remote state, upload content, require
 creator authority, or need a server build live under `additional_features/`;
 they are typechecked but never imported by the default client bundle.
 
+This is a knowledge template, not a game to clone. A derived game should begin
+with its own mechanic, audience, camera, interactions, and art direction;
+select only the relevant renderer and platform boundaries; replace the example
+identity and systems; and remove every unused route, module, and dependency.
+
+## Pixi, Three.js, or both
+
+One repository and one `npm run dev` command expose three valid rendering
+choices:
+
+- the main demo is **Pixi only**;
+- **RUN Features → Rendering Lab → Three Only** renders both its 3D world and
+  geometry HUD in Three.js; and
+- **Three + Pixi** layers a transparent Pixi HUD over the same Three world,
+  driven by one resize/lifecycle/animation coordinator.
+
+The Three renderer code is lazy-loaded only when the lab opens. Games that need
+only Pixi should remove the lab and Three dependency. Games that need only
+Three—including Three-rendered UI—should remove the Pixi demo and dependency
+once no Pixi imports remain. Hybrid games should share one application
+foundation and keep renderer ownership explicit.
+
+Read [`docs/rendering-architecture.md`](docs/rendering-architecture.md) for the
+selection table, file boundaries, lifecycle contract, Three UI approach,
+safe-area rules, cleanup requirements, and the explicit “derive, do not copy”
+workflow.
+
 ## Quick start
 
 Node.js 22 or newer is required. Install the exact reviewed dependency graph
 from the lockfile:
 
 ```sh
-git clone https://github.com/LorenzGit/rundot_template-pixi-webgpu.git
-cd rundot_template-pixi-webgpu
+git clone https://github.com/LorenzGit/rundot_template.git
+cd rundot_template
 npm ci
 npm run dev
 ```
@@ -182,6 +213,7 @@ Before adapting or publishing a derived game, run the complete verification
 suite:
 
 ```sh
+npx playwright install chromium # one-time local browser install
 npm run check:all
 ```
 
@@ -191,8 +223,12 @@ Useful focused commands:
 npm run typecheck          # active app and additional feature references
 npm run format             # apply the repository formatter
 npm run lint               # Biome correctness and accessibility lint
+npm run simulate           # deterministic headless gameplay proof
+npm run test:e2e           # responsive browser and orientation smoke suite
+npm run test:e2e:headed    # same suite with a visible browser
+npm run audit:public       # credentials, private paths, licenses, and repository hygiene
 npm run check              # format, lint, tests, normal + bundled builds
-npm run check:all          # check plus multiplayer + Syncplay builds
+npm run check:all          # check, browser smoke, multiplayer, and Syncplay builds
 npm run build              # RUN embedded-library build
 npm run build:bundled      # standalone fallback build
 npm run dev:playground     # real RUN services; sign-in required
@@ -212,7 +248,8 @@ template never imports Firebase directly.
 
 React and React DOM are also pinned to the exact versions in SDK 5.24's
 embedded-library manifest. The build verifier fails if that optimization
-silently stops working or if a generated JavaScript chunk exceeds 600 kB.
+silently stops working. Ordinary JavaScript chunks are capped at 600 kB; the
+lazy, optional Three WebGPU distribution has a separate explicit 800 kB cap.
 The npm install-script policy pins the reviewed SDK and esbuild scripts while
 denying unnecessary Firebase, protobuf, and native fsevents install behavior.
 
@@ -221,7 +258,10 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
 | Path | Purpose |
 | --- | --- |
 | `.agents/skills/` | Project-local authoring skills copied with the template |
+| `e2e/` | Responsive, scrolling, orientation, diagnostics, and runtime-error browser smoke tests |
 | `src/game/` | Pixi application, orientation-adaptive stage, demo scene, particles, and tweens |
+| `src/dev/` | Development-only screen previews and session tuning/diagnostics |
+| `src/rendering/` | Lazy Three-only and Three + Pixi composition references |
 | `src/sdk/` | Capability-gated RUN facade and visible Feature Lab integration |
 | `src/systems/` | Persistence, trusted time, localization, and daily systems |
 | `src/ui/` | React-owned menus, HUD, settings, and platform demonstrations |
@@ -235,6 +275,10 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
   that fails. `?renderer=webgpu` and
   `?renderer=webgl` force a backend for QA; the result is exposed as
   `document.documentElement.dataset.renderer`.
+- The Rendering Lab lazily exercises Three.js WebGPU-first/WebGL 2 fallback,
+  a Three-rendered orthographic HUD, transparent Pixi composition, one shared
+  frame loop, responsive cameras, reduced motion, lifecycle pause, and explicit
+  GPU teardown.
 - A centered portrait-first frame expands into a deliberate two-column
   landscape layout instead of squeezing the portrait UI. The Pixi stage uses
   width-fit portrait and height-fit landscape design units, while RUN and
@@ -264,6 +308,15 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
   counters. Its direction is recorded in `docs/audio.md`.
 - `?qa=1` installs a semantic `globalThis.__gameQa` contract in development
   only. Production builds do not expose it.
+- `?screen=<id>` opens a stable development-only route directly, while
+  `?debug=1` adds a compact FPS, renderer, DPR, viewport, orientation, safe-area,
+  quality, and reduced-motion panel. The production build verifier rejects
+  these tools if they leak into shipped JavaScript.
+- `npm run simulate` demonstrates seeded, reproducible, headless gameplay
+  evaluation without coupling rules to React or a renderer.
+- `npm run audit:public` checks public repository essentials, sensitive files,
+  developer paths, workspace coupling, escaping symlinks, and credential-shaped
+  values without adding a runtime dependency.
 
 ## Multi-resolution contract
 
@@ -273,10 +326,16 @@ image proportions, scrolling, and state across supported phones, tablets,
 desktop embeds, orientations, DPR values, and device cutouts.
 
 Read [`docs/multi-resolution.md`](docs/multi-resolution.md) before replacing the
-template layout or Pixi stage. It defines the three layout layers, host/browser
-safe-area priority, fixed-short-edge design coordinates, image fit rules,
-minimum text and touch sizes, rotation behavior, failure patterns, and the
-required viewport test matrix.
+template layout, Pixi stage, or Three/hybrid host. It defines the three layout
+layers, host/browser safe-area priority, renderer coordinate policies, image
+fit rules, minimum text and touch sizes, rotation behavior, failure patterns,
+and the required viewport test matrix.
+
+Read [`docs/verification.md`](docs/verification.md) for direct screen preview
+URLs, the development diagnostics panel, verification levels, the browser
+suite, and the public-repository audit. Read
+[`docs/deterministic-simulation.md`](docs/deterministic-simulation.md) before
+replacing the neutral headless model with a derived game's real rules.
 
 ## Platform reference
 
@@ -300,6 +359,9 @@ required viewport test matrix.
   deliberately needs that workflow.
 - [`docs/run-capabilities.md`](docs/run-capabilities.md) maps every SDK surface,
   what prior games taught the template, required authority, and its source.
+- [`docs/rendering-architecture.md`](docs/rendering-architecture.md) explains
+  when to use Pixi, Three.js, or both without duplicating the application
+  foundation or treating the reference demo as a copyable game.
 - [`docs/rundot-cli.md`](docs/rundot-cli.md) is the CLI command/safety atlas.
 - [`docs/social-k-factor.md`](docs/social-k-factor.md) explains how to make
   invitation, co-op, challenge, and relay loops feel like play while measuring
@@ -331,27 +393,37 @@ example.
 
 ## Deriving a game
 
-1. Copy this directory into the new game’s own folder/repository.
-2. Replace the package name, title, menu identity, storage keys, analytics and
+1. Define the new game’s mechanic, audience, camera, interaction model, and art
+   direction before selecting any example code.
+2. Copy this directory into the new game’s own folder/repository, then retain
+   only the relevant Pixi, Three, or hybrid renderer boundary.
+3. Replace the package name, title, menu identity, storage keys, analytics and
    notification IDs, self-authored `template_*` ad placement IDs, art,
    thumbnail, copy, balance, and procedural presentation.
-3. Keep `base: './'`, capability gates, safe areas, lifecycle handling, error
+4. Keep `base: './'`, capability gates, safe areas, lifecycle handling, error
    boundaries, user-selection suppression, and authoritative reward rules.
-4. Copy only the optional modules and server configs the design needs. Remove
-   unused `additional_features/` material before shipping a focused game.
-5. Replace every `REPLACE_WITH_*` value. A placeholder intentionally makes its
+5. Copy only the optional modules and server configs the design needs. Remove
+   the Rendering Lab and unused `additional_features/` material before shipping
+   a focused game.
+6. Uninstall Pixi or Three when the final source no longer imports it. Do not
+   keep two renderers, two frame loops, or duplicate app services by default.
+7. Replace every `REPLACE_WITH_*` value. A placeholder intentionally makes its
    platform feature unavailable.
-6. Verify local, RUN Playground, and production-host behavior separately. Never
+8. Verify local, RUN Playground, and production-host behavior separately. Never
    fake host-only success in local development.
-7. Keep project-local authoring skills that serve the derived game and remove
+9. Keep project-local authoring skills that serve the derived game and remove
    those that do not. They are development knowledge, not gameplay features or
    runtime dependencies.
-8. Immediately before deployment, run `npm run check:all` and the workspace
+10. Replace the development screen registry and simulation model with the
+    derived game's routes and deterministic core; remove controls that no longer
+    provide useful QA evidence.
+11. Immediately before deployment, run `npm run check:all` and the workspace
    readiness audit, then produce a fresh build.
 
 `game.config.prod.json` is a non-deployable placeholder until its game ID is
-replaced. The supplied thumbnail and Pixel Foundry presentation are examples,
-not defaults to preserve.
+replaced. The supplied thumbnail, Pixel Foundry presentation, renderer scenes,
+economy, and menus are examples—not defaults to preserve and not a visual or
+mechanical target for a derived game.
 
 ## Repository hygiene
 

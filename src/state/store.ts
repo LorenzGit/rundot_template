@@ -8,7 +8,15 @@
  */
 import { useSyncExternalStore } from "react";
 
-export type MenuScreen = "main" | "daily-rewards" | "daily-quests" | "shop" | "stats" | "run-features" | "settings";
+export type MenuScreen =
+    | "main"
+    | "daily-rewards"
+    | "daily-quests"
+    | "shop"
+    | "stats"
+    | "run-features"
+    | "rendering-lab"
+    | "settings";
 
 export interface AppState {
     /** Boot and navigation state */

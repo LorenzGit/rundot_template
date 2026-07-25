@@ -1,8 +1,8 @@
 import { getRunCapabilities, readAppStorage, writeAppStorage } from "../sdk/runSdk.ts";
 import { store, type AppState } from "../state/store.ts";
 
-const SAVE_KEY = "template-pixi-webgpu-save";
-const LEGACY_LOCAL_SAVE_KEY = "template-pixi-webgpu.save";
+const SAVE_KEY = "rundot_template-save";
+const LEGACY_SAVE_KEYS = ["template-pixi-webgpu-save", "template-pixi-webgpu.save"] as const;
 export const SAVE_VERSION = 2;
 
 export interface GameSaveV2 {
@@ -34,9 +34,13 @@ export interface GameSaveV2 {
 
 export type SaveSource = "run" | "local" | "defaults";
 
-function readLocalSave(): string | null {
+function readLocalSave(): { key: string; value: string } | null {
     try {
-        return window.localStorage.getItem(SAVE_KEY) ?? window.localStorage.getItem(LEGACY_LOCAL_SAVE_KEY);
+        for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
+            const value = window.localStorage.getItem(key);
+            if (value !== null) return { key, value };
+        }
+        return null;
     } catch (error) {
         console.warn("[save] local fallback read failed", error);
         return null;
@@ -199,20 +203,33 @@ async function persist(serialized: string): Promise<boolean> {
 export const saveSystem = {
     async load(): Promise<SaveSource> {
         if (!usesRunStorage()) {
-            const save = parse(readLocalSave());
+            const stored = readLocalSave();
+            const save = parse(stored?.value ?? null);
             if (save) apply(save);
             lastSaved = JSON.stringify(snapshot());
+            if (save && stored?.key !== SAVE_KEY) {
+                try {
+                    window.localStorage.setItem(SAVE_KEY, lastSaved);
+                } catch (error) {
+                    console.warn("[save] local key migration failed", error);
+                }
+            }
             return save ? "local" : "defaults";
         }
 
-        const remote = await readAppStorage(SAVE_KEY);
-        if (remote.ok) {
+        for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
+            const remote = await readAppStorage(key);
+            if (!remote.ok) return "defaults";
             const save = parse(remote.value);
-            if (save) apply(save);
+            if (!save) continue;
+
+            apply(save);
             lastSaved = JSON.stringify(snapshot());
-            return save ? "run" : "defaults";
+            if (key !== SAVE_KEY) await writeAppStorage(SAVE_KEY, lastSaved);
+            return "run";
         }
 
+        lastSaved = JSON.stringify(snapshot());
         return "defaults";
     },
 

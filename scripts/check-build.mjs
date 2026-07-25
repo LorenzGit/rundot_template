@@ -47,11 +47,37 @@ if (mode === "multiplayer") {
 const oversizedChunks = fs
     .readdirSync(path.join(dist, "assets"), { withFileTypes: true })
     .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
-    .map((entry) => ({ name: entry.name, bytes: fs.statSync(path.join(dist, "assets", entry.name)).size }))
-    .filter(({ bytes }) => bytes > 600_000);
+    .map((entry) => {
+        const budget = entry.name.startsWith("three-") ? 800_000 : 600_000;
+        return {
+            name: entry.name,
+            bytes: fs.statSync(path.join(dist, "assets", entry.name)).size,
+            budget,
+        };
+    })
+    .filter(({ bytes, budget }) => bytes > budget);
 assert(
     oversizedChunks.length === 0,
-    `JavaScript chunk budget exceeded: ${oversizedChunks.map(({ name, bytes }) => `${name} (${bytes} bytes)`).join(", ")}`,
+    `JavaScript chunk budget exceeded: ${oversizedChunks
+        .map(({ name, bytes, budget }) => `${name} (${bytes} bytes; budget ${budget})`)
+        .join(", ")}`,
 );
+
+const compiledJavaScript = fs
+    .readdirSync(path.join(dist, "assets"), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith(".js"))
+    .map((entry) => fs.readFileSync(path.join(dist, "assets", entry.name), "utf8"))
+    .join("\n");
+for (const developmentMarker of [
+    "Development diagnostics",
+    "RESET SESSION TUNING",
+    'Unknown screen preview "',
+    "safeAreaRefreshCount",
+]) {
+    assert(
+        !compiledJavaScript.includes(developmentMarker),
+        `development-only tooling leaked into production: ${developmentMarker}`,
+    );
+}
 
 console.log(`Build verification passed (${mode}).`);

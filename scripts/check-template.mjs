@@ -75,15 +75,30 @@ const main = read("src/main.tsx");
 const app = read("src/ui/App.tsx");
 const pixiApp = read("src/game/pixiApp.ts");
 const stage = read("src/game/stage.ts");
+const rendererLab = read("src/rendering/createRendererLab.ts");
+const threeReference = read("src/rendering/three/createThreeReference.ts");
+const pixiOverlay = read("src/rendering/pixi/createPixiOverlay.ts");
 const multiResolution = read("docs/multi-resolution.md");
+const renderingArchitecture = read("docs/rendering-architecture.md");
 const thirdPartyNotices = read("THIRD_PARTY_NOTICES.md");
+const contributing = read("CONTRIBUTING.md");
 const localAgents = read("AGENTS.md");
 const img2threejsSkill = read(".agents/skills/img2threejs/SKILL.md");
 const multiplayerSkill = read(".agents/skills/rundot-multiplayer/SKILL.md");
 const multiplayerSources = read(".agents/skills/rundot-multiplayer/references/source-map.md");
 const multiplayerCapabilities = read(".agents/skills/rundot-multiplayer/references/capability-map.md");
+const developmentPreview = read("src/dev/preview.ts");
+const developmentTools = read("src/dev/DevelopmentTools.tsx");
+const verificationGuide = read("docs/verification.md");
+const deterministicSimulationGuide = read("docs/deterministic-simulation.md");
+const simulation = read("scripts/simulate-demo.mjs");
+const publicAudit = read("scripts/audit-public.mjs");
+const e2eSmoke = read("e2e/template.smoke.spec.ts");
+const buildCheck = read("scripts/check-build.mjs");
+const runtimeServices = read("src/systems/runtimeServices.ts");
 
 expect(/^\d+\.\d+\.\d+$/.test(packageJson.version), "package version must be semver");
+expect(packageJson.name === "rundot_template", "package name must match the repository identity");
 expect(lock.version === packageJson.version, "package-lock root version must match package.json");
 expect(lock.packages?.[""]?.version === packageJson.version, "package-lock package version must match package.json");
 expect(packageJson.private === true, "template must prevent accidental npm publication");
@@ -94,6 +109,22 @@ expect(
     packageJson.dependencies?.["react-dom"] === "19.2.4",
     "React DOM must match the SDK 5.24 embedded-library version",
 );
+expect(packageJson.dependencies?.three === "^0.185.1", "Three.js renderer reference must remain versioned");
+expect(packageJson.devDependencies?.["@types/three"] === "^0.185.1", "Three.js types must match the runtime package");
+expect(
+    packageJson.devDependencies?.["@playwright/test"] === "^1.62.0",
+    "responsive browser verification must remain versioned",
+);
+expect(
+    lock.packages?.["node_modules/@playwright/test"]?.version === "1.62.0",
+    "Playwright lockfile version changed without review",
+);
+expect(
+    packageJson.scripts?.simulate === "node scripts/simulate-demo.mjs",
+    "deterministic simulation command is missing",
+);
+expect(packageJson.scripts?.["audit:public"] === "node scripts/audit-public.mjs", "public audit command is missing");
+expect(packageJson.scripts?.["test:e2e"] === "playwright test", "responsive browser test command is missing");
 expect(packageJson.allowScripts?.["esbuild@0.25.12"] === true, "reviewed esbuild install script must remain pinned");
 expect(
     packageJson.allowScripts?.["@series-inc/rundot-game-sdk@5.24.0"] === true,
@@ -112,6 +143,15 @@ expect(
 expect(
     read("src/ui/MainMenu.tsx").includes("packageJson.version"),
     "visible template version must come from package.json",
+);
+expect(readme.startsWith("# rundot_template\n"), "README heading must match the repository name");
+expect(
+    readme.includes("git clone https://github.com/LorenzGit/rundot_template.git"),
+    "README clone command must use the current repository URL",
+);
+expect(
+    !/RUN Pixi WebGPU template/i.test(`${readme}\n${contributing}`),
+    "public documentation still uses the retired Pixi-only template identity",
 );
 expect(!/Current template version:/i.test(readme), "README must not carry a manually duplicated current version");
 
@@ -150,12 +190,20 @@ for (const required of [
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
     "docs/audio.md",
+    "docs/deterministic-simulation.md",
     "docs/monetization.md",
     "docs/multi-resolution.md",
+    "docs/rendering-architecture.md",
     "docs/run-capabilities.md",
     "docs/rundot-cli.md",
     "docs/runtime.md",
+    "docs/verification.md",
+    "e2e/fixtures.ts",
+    "e2e/template.smoke.spec.ts",
+    "playwright.config.ts",
+    "scripts/audit-public.mjs",
     "scripts/check-build.mjs",
+    "scripts/simulate-demo.mjs",
     "additional_features/README.md",
     "additional_features/client/commerce.ts",
     "additional_features/client/navigation.ts",
@@ -179,10 +227,16 @@ for (const required of [
     "additional_features/config/simulation/recipes.json",
     "rundot/realtime.config.json",
     "src/assets/strings.csv",
+    "src/dev/DevelopmentTools.tsx",
+    "src/dev/preview.ts",
     "src/game/particles.ts",
     "src/game/tween.ts",
+    "src/rendering/createRendererLab.ts",
+    "src/rendering/pixi/createPixiOverlay.ts",
+    "src/rendering/three/createThreeReference.ts",
     "src/sdk/featureLab.ts",
     "src/systems/serverTime.ts",
+    "src/ui/RenderingLabScreen.tsx",
     "src/ui/RunFeaturesScreen.tsx",
     "tsconfig.additional-features.json",
 ]) {
@@ -344,6 +398,7 @@ expect(prodConfig.orientation === "Both", "responsive template production orient
 expect(Array.isArray(prodConfig.keywords), "template production keywords field must remain explicit");
 expect(prodConfig.kitId === null, "template production kitId field must remain explicit");
 expect(vite.includes("rundotGameLibrariesPlugin()"), "RUN embedded-library plugin must be enabled");
+expect(vite.includes('three: ["three/webgpu"]'), "Three renderer reference must remain in its own lazy build chunk");
 expect(/process\.env\.RUNDOT_PLAYGROUND\s*===\s*["']1["']/.test(vite), "Playground must remain explicit opt-in");
 expect(
     /process\.env\.RUNDOT_MULTIPLAYER\s*===\s*["']1["']/.test(vite),
@@ -353,6 +408,10 @@ expect(/process\.env\.RUNDOT_SYNCPLAY\s*===\s*["']1["']/.test(vite), "Syncplay c
 expect(
     /screen:\s*["']run-features["']/.test(read("src/ui/MainMenu.tsx")),
     "RUN Feature Lab must remain visible from the main menu",
+);
+expect(
+    app.includes('lazy(() => import("./RenderingLabScreen.tsx"))') && app.includes('screen === "rendering-lab"'),
+    "Rendering Lab must remain a lazy route",
 );
 expect(runSdk.includes("RundotGameAPI.triggerHapticAsync"), "haptics must use the SDK root trigger");
 expect(!/sdkNamespace\(["']haptics["']\)/.test(runSdk), "haptics must not probe a nonexistent runtime namespace");
@@ -371,6 +430,10 @@ expect(
     "the active demo must register Android back navigation",
 );
 expect(
+    main.includes('state.menuScreen === "rendering-lab"') && main.includes('menuScreen: "run-features"'),
+    "Android back must return the nested Rendering Lab to RUN Features",
+);
+expect(
     main.includes("unhandledrejection") && main.includes("event.preventDefault()"),
     "host crashes need a final rejection guard",
 );
@@ -379,14 +442,44 @@ expect(
     "default Pixi initialization must explicitly retry WebGL after a WebGPU device failure",
 );
 expect(
+    rendererLab.includes('import("./three/createThreeReference.ts")') &&
+        rendererLab.includes('import("./pixi/createPixiOverlay.ts")'),
+    "renderer references must remain lazy-loaded by composition",
+);
+expect(
+    rendererLab.includes("requestAnimationFrame(tick)") &&
+        !threeReference.includes("requestAnimationFrame") &&
+        !pixiOverlay.includes("requestAnimationFrame"),
+    "hybrid rendering must use one coordinator-owned animation loop",
+);
+expect(
+    threeReference.includes("new THREE.WebGPURenderer") &&
+        threeReference.includes("forceWebGL") &&
+        threeReference.includes("renderer.clearDepth()"),
+    "Three-only reference must include WebGPU/WebGL selection and a Three-rendered UI pass",
+);
+expect(
+    pixiOverlay.includes("backgroundAlpha: 0") &&
+        pixiOverlay.includes("autoStart: false") &&
+        pixiOverlay.includes("app.render()"),
+    "hybrid Pixi UI must be transparent and coordinator-driven",
+);
+expect(
     saveSystem.includes("pendingSave") && saveSystem.includes("flushInFlight"),
     "save writes must remain serialized and coalesced",
+);
+expect(
+    runSdk.includes("legacyIds") &&
+        runtimeServices.includes('const RETURN_REMINDER_ID = "rundot-template-return-reminder"') &&
+        runtimeServices.includes('const LEGACY_RETURN_REMINDER_ID = "template-pixi-return-reminder"'),
+    "notification identity changes must cancel the legacy reminder before scheduling the current one",
 );
 expect(featureLab.includes("RUN_CAPABILITIES.map"), "Feature Lab must render the complete capability catalog");
 expect(
     featureLab.includes("TRY REWARDED +100") && featureLab.includes("TRY INTERSTITIAL"),
     "Feature Lab must expose both ad flows",
 );
+expect(featureLab.includes("OPEN RENDERING LAB"), "Feature Lab must expose the renderer references");
 expect(
     /\[["']light["'],\s*["']success["'],\s*["']warning["']\]/.test(featureLab),
     "Feature Lab must expose the haptic palette",
@@ -461,6 +554,21 @@ for (const requirement of [
 ]) {
     expect(multiResolution.includes(requirement), `multi-resolution guidance is missing: ${requirement}`);
 }
+for (const requirement of [
+    "Pixi only",
+    "Three only",
+    "Three + Pixi",
+    "npm run dev",
+    "one frame clock",
+    "10 CSS pixels",
+    "Derive; do not copy",
+]) {
+    expect(renderingArchitecture.includes(requirement), `renderer guidance is missing: ${requirement}`);
+}
+expect(
+    readme.includes("docs/rendering-architecture.md") && localAgents.includes("docs/rendering-architecture.md"),
+    "README and agent guidance must route renderer selection to the architecture contract",
+);
 expect(
     runSdk.includes("if (!_ready) return area;"),
     "local browser safe-area environment fallbacks must not be overwritten with zero",
@@ -470,6 +578,51 @@ expect(
         app.includes('window.removeEventListener("orientationchange", refreshSafeArea)') &&
         app.includes("applyRunSafeArea();"),
     "orientation changes must re-read safe areas with StrictMode-safe listener cleanup",
+);
+expect(
+    main.includes("if (import.meta.env.DEV)") &&
+        main.includes('await import("./dev/preview.ts")') &&
+        developmentPreview.includes('new URLSearchParams(window.location.search).get("screen")'),
+    "direct screen previews must remain development-only and query-driven",
+);
+expect(
+    app.includes('import.meta.env.DEV ? lazy(() => import("../dev/DevelopmentTools.tsx")) : null') &&
+        developmentTools.includes("requestAnimationFrame(update)") &&
+        developmentTools.includes("SIMULATED INSET"),
+    "development diagnostics must remain lazy, useful, and production-gated",
+);
+for (const marker of ["Development diagnostics", "RESET SESSION TUNING", "safeAreaRefreshCount"]) {
+    expect(buildCheck.includes(marker), `production build check is missing development marker: ${marker}`);
+}
+for (const viewport of ["320, height: 568", "568, height: 320", "844, height: 390", "1440, height: 900"]) {
+    expect(e2eSmoke.includes(viewport), `browser smoke matrix is missing viewport: ${viewport}`);
+}
+for (const browserContract of [
+    "orientationchange",
+    "data-safe-area-refresh-count",
+    "screen-scroll-region",
+    "screen-end",
+    "smallestText",
+]) {
+    expect(e2eSmoke.includes(browserContract), `browser smoke coverage is missing: ${browserContract}`);
+}
+expect(
+    simulation.includes("createSeededRandom") &&
+        simulation.includes("Identical seeds must produce identical sessions") &&
+        deterministicSimulationGuide.includes("cannot prove"),
+    "deterministic simulation must preserve reproducibility and honest limits",
+);
+expect(
+    publicAudit.includes("git") &&
+        publicAudit.includes("credential-shaped value") &&
+        verificationGuide.includes("npm run audit:public"),
+    "public repository audit or its documentation is incomplete",
+);
+expect(
+    readme.includes("docs/verification.md") &&
+        readme.includes("docs/deterministic-simulation.md") &&
+        localAgents.includes("docs/verification.md"),
+    "README and agent guidance must route the lightweight verification tools",
 );
 for (const edge of ["top", "right", "bottom", "left"]) {
     expect(
@@ -511,10 +664,11 @@ for (const directory of ["additional_features", "docs", "public", "rundot", "scr
 }
 
 for (const file of textFiles()) {
-    if (file === "scripts/check-template.mjs") continue;
+    if (["scripts/check-template.mjs", "scripts/audit-public.mjs"].includes(file)) continue;
     const contents = read(file);
     expect(!/(?:\/Users\/|\/root\/|\\Users\\)/.test(contents), `${file} contains a developer-specific path`);
     expect(!/\.codex\//.test(contents), `${file} contains a private Codex path`);
+    expect(!/\bgame-bot\b/i.test(contents), `${file} contains a private source reference`);
 }
 
 if (failures.length > 0) {

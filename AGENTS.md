@@ -1,9 +1,34 @@
-# RUN Pixi WebGPU template
+# RUN renderer and platform template
 
-This repository is a reusable 2D PixiJS, WebGPU-first portrait starter. Keep
-the renderer, lifecycle, safe-area, accessibility, persistence, and
-capability-gated RUN integration generic. Treat the Pixel Foundry identity,
-demo loop, copy, economy, IDs, and presentation as replaceable examples.
+This repository is a reusable RUN foundation and renderer knowledge base. Its
+default game is a 2D PixiJS, WebGPU-first demo. The lazy Rendering Lab also
+shows a Three-only world/UI and a Three-world + Pixi-UI composition without
+changing the one-command `npm run dev` workflow.
+
+Treat every visible scene as proof, not prescription. Start a derived game from
+its requested mechanic, audience, camera, interactions, and art direction;
+select only the relevant Pixi, Three, or hybrid boundary; and delete the rest.
+Never preserve the Pixel Foundry identity, demo loop, menu, economy, copy,
+audio, IDs, or presentation merely because they exist here. Do not reproduce
+another game’s distinctive mechanics or presentation by using this template as
+a copy-paste source.
+
+Keep lifecycle, safe-area, accessibility, persistence, capability-gated RUN
+integration, authoritative outcomes, and cleanup generic. Do not duplicate
+those application services per renderer. A hybrid game uses one frame clock,
+one resize/lifecycle coordinator, and explicit input ownership. Read
+[`docs/rendering-architecture.md`](docs/rendering-architecture.md) before
+changing renderer composition.
+
+When a derived game selects:
+
+- **Pixi only:** keep `src/game/`; remove the Rendering Lab and `three` when no
+  Three imports remain.
+- **Three only, including UI:** adapt `src/rendering/three/`; replace the
+  reference scene; remove the Pixi demo and `pixi.js` when no Pixi imports
+  remain.
+- **Three + Pixi:** adapt the layered host and shared coordinator; never create
+  independent loops or parallel RUN/save/audio systems.
 
 Follow the parent RUN workspace instructions and the source-of-truth order
 defined there before changing SDK or CLI integration.
@@ -21,9 +46,10 @@ defined there before changing SDK or CLI integration.
   completely, follow its quality gates, and load its referenced `forge/` and
   `grimoire/` resources as directed.
 - `img2threejs` is optional authoring tooling. It produces Three.js code, not a
-  Pixi display object, and is not a runtime dependency of this template. Do
-  not use it for ordinary 2D Pixi artwork or imply that its output renders in
-  Pixi without a deliberate Three.js integration or conversion step.
+  Pixi display object, and is not a runtime dependency of the renderer
+  examples. Do not use it for ordinary 2D Pixi artwork or imply that its output
+  renders in Pixi without a deliberate Three.js integration or conversion
+  step.
 - Using the local skill does not authorize RUN-billed 3D generation, external
   asset downloads, deployment, publication, or other remote mutations.
 - Preserve the vendored skill's Apache-2.0 license and its entry in
@@ -33,3 +59,13 @@ defined there before changing SDK or CLI integration.
 
 Run `npm run check:all` after template changes. The invariant suite verifies
 that project-local skills retain their instructions and required resources.
+Install the local Chromium binary once with `npx playwright install chromium`.
+Use `?screen=<id>` for direct visual review, `?debug=1` for development-only
+runtime diagnostics and session tuning, and `?qa=1` for semantic browser
+automation. Read `docs/verification.md` before selecting a smaller focused
+check. Run `npm run simulate` for deterministic gameplay proofs and
+`npm run audit:public` before publishing or redistributing the repository.
+
+The preview, diagnostics, tuning, and QA contracts must remain development-only.
+They may set up local test state but must never fabricate a successful RUN ad,
+purchase, entitlement, notification, profile, or privileged outcome.

@@ -45,10 +45,14 @@ For DOM and React UI:
 - Use dynamic viewport units such as `dvh` where mobile browser chrome can
   change the usable height.
 
-For Pixi gameplay, work in a stable design coordinate system:
+For canvas gameplay, choose a stable layout coordinate policy:
 
-- In portrait, fit the fixed design width and let the design height vary.
-- In landscape, fit the fixed design height and let the design width vary.
+- For Pixi, fit the fixed design width in portrait and the fixed design height
+  in landscape, allowing the long design edge to vary.
+- For Three.js, resize the renderer from the playable host, update camera
+  aspect/projection, and re-anchor screen-space or orthographic UI.
+- For a hybrid, feed the same logical width, height, DPR cap, pause state, and
+  frame clock to both layers.
 - Read both current design dimensions again after every renderer resize.
 - Anchor HUD and required play objects to current edges or centers, not a
   hardcoded long edge.
@@ -56,8 +60,11 @@ For Pixi gameplay, work in a stable design coordinate system:
   rebuilding the run.
 
 The template implements this fixed-short-edge policy in
-`src/game/stage.ts`. It keeps object scale stable while allowing different
+`src/game/stage.ts`. It keeps Pixi object scale stable while allowing different
 aspect ratios to reveal more space on the long axis.
+`src/rendering/createRendererLab.ts` and
+`docs/rendering-architecture.md` provide the corresponding Three-only and
+hybrid lifecycle reference.
 
 ## Safe-area contract
 

@@ -65,6 +65,13 @@ export default function RunFeaturesScreen() {
     const capabilities = getRunCapabilities();
     const runtimeConfig = runtimeServices.config;
 
+    const openRenderingLab = async () => {
+        await audioManager.unlock();
+        audioManager.play("tap");
+        void runtimeServices.haptic("light");
+        store.patch({ menuScreen: "rendering-lab" });
+    };
+
     const testHaptic = async (style: HapticStyle) => {
         await audioManager.unlock();
         setBusy("haptic");
@@ -163,6 +170,22 @@ export default function RunFeaturesScreen() {
                     <strong>{runtimeConfig.adsEnabled ? "ENABLED" : "OFF"}</strong>
                 </article>
             </section>
+
+            <article className="feature-demo-card feature-demo-renderer">
+                <div>
+                    <p className="eyebrow">RENDERER ARCHITECTURE</p>
+                    <h3>PIXI / THREE / HYBRID</h3>
+                </div>
+                <p>
+                    Open two live, responsive references: a Three-only world with Three UI, and a Three world beneath a
+                    transparent Pixi HUD.
+                </p>
+                <div className="feature-actions feature-actions-single">
+                    <button type="button" disabled={busy !== null} onClick={() => void openRenderingLab()}>
+                        OPEN RENDERING LAB
+                    </button>
+                </div>
+            </article>
 
             <article className="feature-demo-card feature-demo-ad">
                 <div>

@@ -21,6 +21,8 @@ import SettingsScreen from "./SettingsScreen.tsx";
 import { applyRunSafeArea } from "../sdk/runSdk.ts";
 
 const RunFeaturesScreen = lazy(() => import("./RunFeaturesScreen.tsx"));
+const RenderingLabScreen = lazy(() => import("./RenderingLabScreen.tsx"));
+const DevelopmentTools = import.meta.env.DEV ? lazy(() => import("../dev/DevelopmentTools.tsx")) : null;
 
 function useOrientationSafeArea(): void {
     useEffect(() => {
@@ -50,6 +52,18 @@ function MenuRoute() {
                 <RunFeaturesScreen />
             </Suspense>
         );
+    if (screen === "rendering-lab")
+        return (
+            <Suspense
+                fallback={
+                    <main className="route-loading" aria-busy="true">
+                        LOADING RENDERING LAB…
+                    </main>
+                }
+            >
+                <RenderingLabScreen />
+            </Suspense>
+        );
     if (screen === "settings") return <SettingsScreen />;
     return <MainMenu />;
 }
@@ -68,7 +82,17 @@ export default function App() {
                 </div>
             )}
             <Toast />
+            <DevelopmentToolsSlot />
         </div>
+    );
+}
+
+function DevelopmentToolsSlot() {
+    if (!DevelopmentTools || new URLSearchParams(window.location.search).get("debug") !== "1") return null;
+    return (
+        <Suspense fallback={null}>
+            <DevelopmentTools />
+        </Suspense>
     );
 }
 

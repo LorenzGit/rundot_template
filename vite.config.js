@@ -52,11 +52,13 @@ export default defineConfig({
     build: {
         // Top-level await in the RUN SDK needs a modern target.
         target: "es2022",
-        // Pixi is intentionally isolated as one renderer chunk. Keep the
-        // warning budget explicit and enforce the same ceiling after builds.
-        chunkSizeWarningLimit: 600,
+        // Renderer libraries stay isolated and cacheable. Three is reached
+        // only through the lazy Rendering Lab route in the reference app.
+        // The verifier keeps ordinary chunks below 600 kB and allows the
+        // optional Three WebGPU distribution up to its explicit 800 kB cap.
+        chunkSizeWarningLimit: 800,
         rollupOptions: {
-            output: { manualChunks: { pixi: ["pixi.js"] } },
+            output: { manualChunks: { pixi: ["pixi.js"], three: ["three/webgpu"] } },
         },
     },
     esbuild: { target: "es2022" },

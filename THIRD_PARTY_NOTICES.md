@@ -1,7 +1,7 @@
 # Third-party notices
 
 The template's direct runtime dependencies are distributed under the following
-licenses, as declared by the installed packages audited on 2026-07-21:
+licenses, as declared by the installed packages audited on 2026-07-24:
 
 | Package | Reviewed version | License |
 | --- | --- | --- |
@@ -10,12 +10,22 @@ licenses, as declared by the installed packages audited on 2026-07-21:
 | `pixi.js` | 8.19.0 | MIT |
 | `react` | 19.2.4 | MIT |
 | `react-dom` | 19.2.4 | MIT |
+| `three` | 0.185.1 | MIT |
 
 The lockfile also resolves transitive and development dependencies. Their
 license texts ship in their npm packages and remain controlling. Re-run a
 dependency-license review whenever the lockfile changes, preserve required
 copyright and attribution notices, and include applicable notices with any
 distributed compiled build. This file does not replace those license texts.
+
+## Development and QA tooling
+
+| Package | Reviewed version | License |
+| --- | --- | --- |
+| `@playwright/test` | 1.62.0 | Apache-2.0 |
+
+Playwright is used only for local and CI browser verification and is not
+included in the compiled game bundle.
 
 ## Vendored authoring tools
 

@@ -24,6 +24,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Install browser used by responsive smoke tests
+        run: npx playwright install --with-deps chromium
+
       - name: Run every template check and build track
         run: npm run check:all
 

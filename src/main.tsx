@@ -60,6 +60,10 @@ async function boot() {
 
     // 6. Loading done — hand over to the menu.
     store.patch({ phase: "menu" });
+    if (import.meta.env.DEV) {
+        const { applyDevelopmentScreenPreview } = await import("./dev/preview.ts");
+        applyDevelopmentScreenPreview();
+    }
 
     // 7. Host lifecycle hooks. Register AFTER boot so handlers never race
     //    half-initialized state.
@@ -102,6 +106,8 @@ async function boot() {
             if (state.phase === "playing") {
                 store.patch({ phase: "menu", menuScreen: "main", paused: false });
                 void saveSystem.flush();
+            } else if (state.menuScreen === "rendering-lab") {
+                store.patch({ menuScreen: "run-features" });
             } else if (state.menuScreen !== "main") {
                 store.patch({ menuScreen: "main" });
             } else {

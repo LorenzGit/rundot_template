@@ -1,7 +1,8 @@
 # Contributing
 
-Thank you for improving the RUN Pixi WebGPU template. Keep contributions small,
-reviewable, and safe for downstream game creators.
+Thank you for improving `rundot_template`, the RUN renderer and platform
+reference. Keep contributions small, reviewable, and safe for downstream game
+creators.
 
 ## Before opening a pull request
 

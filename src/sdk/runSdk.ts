@@ -106,10 +106,14 @@ export function getRunSafeArea(): Readonly<RunSafeArea> {
 /** Publish host insets as CSS variables without coupling UI code to the SDK. */
 export function applyRunSafeArea(): Readonly<RunSafeArea> {
     const area = getRunSafeArea();
+    const root = document.documentElement;
+    if (import.meta.env.DEV) {
+        const count = Number(root.dataset.safeAreaRefreshCount ?? 0);
+        root.dataset.safeAreaRefreshCount = String(count + 1);
+    }
     // Outside RUN, leave the stylesheet's env(safe-area-inset-*) fallbacks
     // intact. Publishing zero-valued host data would erase real browser insets.
     if (!_ready) return area;
-    const root = document.documentElement;
     root.style.setProperty("--safe-top", `${area.top}px`);
     root.style.setProperty("--safe-right", `${area.right}px`);
     root.style.setProperty("--safe-bottom", `${area.bottom}px`);
@@ -309,13 +313,16 @@ export async function recordFunnelStep(step: number, name: string, funnel: strin
 
 export async function rearmLocalNotification(input: {
     id: string;
+    legacyIds?: readonly string[];
     title: string;
     body: string;
     delaySeconds: number;
 }): Promise<boolean> {
     if (!capabilities.notifications) return false;
     try {
-        await withTimeout(RundotGameAPI.notifications.cancelNotification(input.id), 1_500, "notifications.cancel");
+        for (const id of new Set([input.id, ...(input.legacyIds ?? [])])) {
+            await withTimeout(RundotGameAPI.notifications.cancelNotification(id), 1_500, "notifications.cancel");
+        }
         const result = await withTimeout(
             RundotGameAPI.notifications.submitMessageAsync({
                 channels: ["local"],

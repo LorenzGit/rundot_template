@@ -1,0 +1,157 @@
+import type { Page } from "@playwright/test";
+import { expect, test } from "./fixtures.ts";
+
+interface QaSnapshot {
+    phase: "loading" | "menu" | "playing";
+    menuScreen: string;
+    coins: number;
+}
+
+const viewports = [
+    { name: "short portrait phone", width: 320, height: 568 },
+    { name: "tall portrait phone", width: 390, height: 844 },
+    { name: "short landscape phone", width: 568, height: 320 },
+    { name: "wide landscape phone", width: 844, height: 390 },
+    { name: "tablet", width: 1024, height: 768 },
+    { name: "desktop embed", width: 1440, height: 900 },
+] as const;
+
+async function openReady(page: Page, query = "qa=1"): Promise<void> {
+    await page.goto(`/?${query}`);
+    await expect(page.locator("html")).toHaveAttribute("data-qa-contract", "ready");
+    await expect(page.locator("#app-frame")).toBeVisible();
+}
+
+async function readQaSnapshot(page: Page): Promise<QaSnapshot> {
+    return page.evaluate(() => {
+        const qa = (
+            globalThis as typeof globalThis & {
+                __gameQa?: { snapshot(): QaSnapshot };
+            }
+        ).__gameQa;
+        if (!qa) throw new Error("Development QA contract is unavailable");
+        return qa.snapshot();
+    });
+}
+
+async function assertVisibleUiFits(page: Page): Promise<void> {
+    const result = await page.locator("#app-frame").evaluate((frame) => {
+        const viewport = { width: window.innerWidth, height: window.innerHeight };
+        const frameRect = frame.getBoundingClientRect();
+        const interactive = Array.from(frame.querySelectorAll<HTMLElement>("button, input, select, [role='button']"))
+            .filter((element) => {
+                const style = getComputedStyle(element);
+                const rect = element.getBoundingClientRect();
+                return style.visibility !== "hidden" && style.display !== "none" && rect.width > 0 && rect.height > 0;
+            })
+            .map((element) => {
+                const rect = element.getBoundingClientRect();
+                return {
+                    label: element.getAttribute("aria-label") || element.textContent?.trim() || element.tagName,
+                    left: rect.left,
+                    right: rect.right,
+                    top: rect.top,
+                    bottom: rect.bottom,
+                };
+            });
+        const clipped = interactive.filter(
+            (item) =>
+                item.left < -1 || item.top < -1 || item.right > viewport.width + 1 || item.bottom > viewport.height + 1,
+        );
+        const textSizes = Array.from(frame.querySelectorAll<HTMLElement>("*"))
+            .filter((element) => {
+                const rect = element.getBoundingClientRect();
+                const style = getComputedStyle(element);
+                const hasOwnText = Array.from(element.childNodes).some(
+                    (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+                );
+                return hasOwnText && rect.width > 0 && rect.height > 0 && style.visibility !== "hidden";
+            })
+            .map((element) => Number.parseFloat(getComputedStyle(element).fontSize))
+            .filter(Number.isFinite);
+        return {
+            frameFits:
+                frameRect.left >= -1 &&
+                frameRect.top >= -1 &&
+                frameRect.right <= viewport.width + 1 &&
+                frameRect.bottom <= viewport.height + 1,
+            clipped,
+            smallestText: Math.min(...textSizes),
+        };
+    });
+    expect(result.frameFits).toBe(true);
+    expect(result.clipped).toEqual([]);
+    expect(result.smallestText).toBeGreaterThanOrEqual(10);
+}
+
+for (const viewport of viewports) {
+    test(`main menu fits the ${viewport.name}`, async ({ page }) => {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await openReady(page);
+        await expect(page.getByRole("button", { name: /play demo/i })).toBeVisible();
+        await assertVisibleUiFits(page);
+    });
+}
+
+test("direct screen preview is reachable and its content scrolls to the end", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 600 });
+    await openReady(page, "qa=1&screen=run-features");
+    await expect(page.getByRole("heading", { name: "RUN FEATURES" })).toBeVisible();
+
+    const scrollRegion = page.getByTestId("screen-scroll-region");
+    const dimensions = await scrollRegion.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+    }));
+    expect(dimensions.scrollHeight).toBeGreaterThan(dimensions.clientHeight);
+    await scrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect(page.getByTestId("screen-end")).toBeInViewport();
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
+    await scrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect(page.getByTestId("screen-end")).toBeInViewport();
+});
+
+test("orientation changes refresh safe areas without losing game state", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=game");
+    const before = await readQaSnapshot(page);
+    expect(before.phase).toBe("playing");
+    const refreshBefore = Number((await page.locator("html").getAttribute("data-safe-area-refresh-count")) ?? 0);
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
+    await expect
+        .poll(async () => Number((await page.locator("html").getAttribute("data-safe-area-refresh-count")) ?? 0))
+        .toBeGreaterThan(refreshBefore);
+    const landscape = await readQaSnapshot(page);
+    expect(landscape.phase).toBe("playing");
+    expect(landscape.coins).toBe(before.coins);
+
+    const refreshLandscape = Number(
+        (await page.locator("html").getAttribute("data-safe-area-refresh-count")) ?? refreshBefore,
+    );
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.evaluate(() => window.dispatchEvent(new Event("orientationchange")));
+    await expect
+        .poll(async () => Number((await page.locator("html").getAttribute("data-safe-area-refresh-count")) ?? 0))
+        .toBeGreaterThan(refreshLandscape);
+    expect((await readQaSnapshot(page)).phase).toBe("playing");
+});
+
+test("development diagnostics tune only the current session", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=settings&debug=1");
+    await expect(page.getByTestId("development-tools")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "SETTINGS" })).toBeVisible();
+
+    await page.getByLabel("SAFE-AREA GUIDE").check();
+    await expect(page.getByTestId("safe-area-guide")).toBeVisible();
+    await page.getByLabel(/SIMULATED INSET/).fill("24");
+    const inset = await page.locator("html").evaluate((element) => element.style.getPropertyValue("--safe-top"));
+    expect(inset).toBe("24px");
+
+    await page.getByRole("button", { name: "RESET SESSION TUNING" }).click();
+    await expect(page.getByTestId("safe-area-guide")).toHaveCount(0);
+});

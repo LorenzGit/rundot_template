@@ -33,6 +33,9 @@ const DEFAULTS: Readonly<RuntimeConfig> = Object.freeze({
     shopEnabled: false,
 });
 
+const RETURN_REMINDER_ID = "rundot-template-return-reminder";
+const LEGACY_RETURN_REMINDER_ID = "template-pixi-return-reminder";
+
 let config: RuntimeConfig = { ...DEFAULTS };
 let nextRefreshTimer = 0;
 
@@ -86,7 +89,8 @@ async function rearmNotifications(): Promise<void> {
     const state = store.get();
     if (!state.notificationsEnabled || state.notificationsConsent !== "granted") return;
     await rearmLocalNotification({
-        id: "template-pixi-return-reminder",
+        id: RETURN_REMINDER_ID,
+        legacyIds: [LEGACY_RETURN_REMINDER_ID],
         title: t("NotificationTitle"),
         body: t("NotificationReEngagementBody"),
         delaySeconds: config.notificationDelaySeconds,
