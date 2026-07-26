@@ -2,12 +2,14 @@ import packageJson from "../../package.json";
 import { audioManager } from "../audio/audioManager.ts";
 import { getRunCapabilities } from "../sdk/runSdk.ts";
 import { store } from "../state/store.ts";
+import { rendererLifecycleSnapshot } from "../rendering/rendererLifecycle.ts";
 
 interface TemplateGameQa {
     snapshot(): Record<string, unknown>;
     startRun(): void;
     openSettings(): void;
     openRunFeatures(): void;
+    openRendererLab(): void;
     returnToMenu(): void;
 }
 
@@ -30,6 +32,7 @@ export function installBrowserQaContract(): void {
                 score: state.score,
                 coins: state.coins,
                 renderer: document.documentElement.dataset.renderer ?? "pending",
+                rendererLifecycle: rendererLifecycleSnapshot(),
                 host: getRunCapabilities().host,
                 audio: audioManager.debugSnapshot(),
             };
@@ -42,6 +45,9 @@ export function installBrowserQaContract(): void {
         },
         openRunFeatures() {
             store.patch({ phase: "menu", menuScreen: "run-features" });
+        },
+        openRendererLab() {
+            store.patch({ phase: "menu", menuScreen: "rendering-lab" });
         },
         returnToMenu() {
             store.patch({ phase: "menu", menuScreen: "main" });

@@ -1,4 +1,5 @@
 import { Graphics } from "pixi.js";
+import { NoiseRandom } from "./noiseRandom.ts";
 
 /**
  * Very small particle burst helper used by the template demo scene.
@@ -79,7 +80,10 @@ function hexFromHsl(h: number, s: number, l: number): number {
     return (to255(r) << 16) | (to255(g) << 8) | to255(b);
 }
 
-export function createParticleEmitter(root: { addChild: (g: Graphics) => void }): ParticleEmitter {
+export function createParticleEmitter(
+    root: { addChild: (g: Graphics) => void },
+    random = new NoiseRandom(),
+): ParticleEmitter {
     const particles = new Set<LiveParticle>();
 
     function spawn(def: ParticleDef): void {
@@ -90,12 +94,12 @@ export function createParticleEmitter(root: { addChild: (g: Graphics) => void })
             vy: def.vy,
             life: def.lifeMs,
             lifeMs: def.lifeMs,
-            spin: (Math.random() - 0.5) * 2.5,
+            spin: random.float(-1.25, 1.25),
             radius: def.radius,
         };
 
         g.circle(0, 0, def.radius);
-        g.fill({ color: hexFromHsl(def.hue, 90, 58 + Math.random() * 28), alpha: 0.95 });
+        g.fill({ color: hexFromHsl(def.hue, 90, random.float(58, 86)), alpha: 0.95 });
         g.x = def.x;
         g.y = def.y;
         root.addChild(g);
@@ -103,7 +107,7 @@ export function createParticleEmitter(root: { addChild: (g: Graphics) => void })
     }
 
     function randomRange(min: number, max: number): number {
-        return min + Math.random() * Math.max(0.0001, max - min);
+        return random.float(min, Math.max(min + 0.0001, max));
     }
 
     return {
@@ -112,15 +116,15 @@ export function createParticleEmitter(root: { addChild: (g: Graphics) => void })
             const baseHue = Number.isFinite(o.hue as number) ? (o.hue as number) : 210;
 
             for (let i = 0; i < o.burst; i++) {
-                const angle = (Math.PI * 2 * i) / o.burst + (Math.random() - 0.5) * 0.5;
+                const angle = (Math.PI * 2 * i) / o.burst + random.float(-0.25, 0.25);
                 const speed = randomRange(o.speedMinPxPerSec, o.speedMaxPxPerSec);
                 const life = randomRange(o.lifeMinMs, o.lifeMaxMs);
                 const r = randomRange(o.radiusMinPx, o.radiusMaxPx);
-                const hue = baseHue + (Math.random() * 60 - 30);
+                const hue = baseHue + random.float(-30, 30);
 
                 spawn({
-                    x: x + (Math.random() - 0.5) * 3,
-                    y: y + (Math.random() - 0.5) * 3,
+                    x: x + random.float(-1.5, 1.5),
+                    y: y + random.float(-1.5, 1.5),
                     vx: (Math.cos(angle) * speed) / 1000,
                     vy: (Math.sin(angle) * speed) / 1000,
                     lifeMs: life,

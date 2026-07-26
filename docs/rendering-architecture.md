@@ -53,15 +53,63 @@ layers to compete for the same gesture.
 
 Any renderer adopted by a derived game must:
 
-1. initialize asynchronously and expose the backend that actually succeeded;
-2. size from its playable host rather than a hardcoded phone resolution;
-3. cap device-pixel ratio according to the quality setting;
-4. update cameras, viewports, hit regions, and HUD layout on every host resize;
-5. keep state during live resize and orientation changes;
-6. stop decorative work for RUN pause, hidden tabs, and reduced motion;
-7. use one frame clock when multiple renderers share a presentation; and
-8. remove listeners/canvases and dispose geometries, materials, textures, and
-   renderer resources on teardown.
+1. acquire one runtime through `src/rendering/rendererLifecycle.ts`;
+2. initialize asynchronously and expose the backend that actually succeeded;
+3. size from its playable host rather than a hardcoded phone resolution;
+4. cap device-pixel ratio according to the quality setting;
+5. update cameras, viewports, hit regions, and HUD layout on every host resize;
+6. keep state during live resize and orientation changes;
+7. stop decorative work for RUN pause, hidden tabs, and reduced motion;
+8. use one frame clock when multiple renderers share a presentation; and
+9. register listeners, canvases, display objects, geometries, materials,
+   textures, and renderer resources with the lifecycle scope for ordered
+   teardown.
+
+### Serialized renderer ownership
+
+- Maintain at most one active renderer runtime per JavaScript realm. A runtime
+  may own one PixiJS `Application`, one Three.js renderer, or—only for the
+  deliberate hybrid architecture—one of each, coordinated and destroyed as one
+  unit. Never overlap two runtimes or two Pixi applications.
+- Serialize initialization, backend fallback, cancellation cleanup, and
+  destruction through the same realm-stable promise queue. Lock initialization
+  itself; waiting only for the previous teardown does not prevent two
+  asynchronous initializers from overlapping.
+- Treat cancellation logically. Renderer initialization is not guaranteed to
+  be abortable, so a cancelled request waits for initialization to settle,
+  destroys any partial or complete renderer inside the queue, and only then
+  allows the next request to initialize.
+- React StrictMode mount → cleanup → mount, route changes, and HMR must use
+  lifecycle leases. Scene code may destroy its own display objects and GPU
+  resources through registered lifecycle cleanup, but it must never directly
+  call `Application.destroy()`, `renderer.destroy()`, or `renderer.dispose()`.
+- Prefer resetting the stage or scene while the same loaded build retains the
+  same backend and canvas owner. A real reload or new deployment creates a new
+  JavaScript realm and therefore a new lifecycle manager.
+- PixiJS uses module-level program caches and may use shared Assets and
+  textures. Treat one live Pixi application per realm as a project invariant;
+  do not assume overlapping applications and their resource ownership are
+  isolated.
+
+### Strict WebGPU QA and failures
+
+Production may deliberately fall back to WebGL. WebGPU QA must use
+`?renderer=webgpu`, verify the backend that actually initialized, and fail
+instead of silently falling back. This applies to Pixi, Three, and every layer
+of a hybrid runtime.
+
+Treat uncaught render errors, uncaptured GPU errors, and unexpected
+`GPUDevice.lost` while a renderer is active as test failures. Device loss whose
+reason is `destroyed` after manager-owned teardown is expected. Validate
+repeated game launch/exit, renderer-lab entry/exit, mode switching, StrictMode
+remounts, HMR, ViewDeck reload/redeploy, orientation changes, and
+background/foreground cycles. At every checkpoint:
+
+- lifecycle diagnostics report no more than one active runtime and one
+  concurrent initializer;
+- the DOM contains only the canvas layers owned by that runtime;
+- no renderer failure event or error reaches the console; and
+- teardown finishes before another initialization starts.
 
 The app-level safe area wraps the Rendering Lab host, so its required controls
 stay out of cutouts. A full-canvas derived game must also translate
@@ -121,3 +169,6 @@ For visual review, start `npm run dev`, open the Rendering Lab, switch modes,
 and test portrait → landscape → portrait without leaving the route. Verify
 that the backend badge is honest, canvases do not duplicate, motion pauses,
 the current mode survives resize, and navigating back releases both canvases.
+Then repeatedly enter and leave the game and Rendering Lab under React
+StrictMode and confirm the lifecycle snapshot never exceeds one active runtime
+or concurrent initializer.

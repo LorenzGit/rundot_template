@@ -200,6 +200,11 @@ Three—including Three-rendered UI—should remove the Pixi demo and dependency
 once no Pixi imports remain. Hybrid games should share one application
 foundation and keep renderer ownership explicit.
 
+All three paths acquire a realm-wide lifecycle lease. Initialization, fallback,
+cancellation cleanup, and teardown are serialized, so React StrictMode, route
+changes, and hot reload cannot overlap renderer runtimes. Forced
+`?renderer=webgpu` mode is strict for QA and never silently falls back.
+
 Read [`docs/rendering-architecture.md`](docs/rendering-architecture.md) for the
 selection table, file boundaries, lifecycle contract, Three UI approach,
 safe-area rules, cleanup requirements, and the explicit “derive, do not copy”
@@ -267,6 +272,7 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
 | --- | --- |
 | `.agents/skills/` | Project-local authoring skills copied with the template |
 | `e2e/` | Responsive, scrolling, orientation, diagnostics, and runtime-error browser smoke tests |
+| `src/assets/art/` | Original portrait/landscape PNG reference art; replace it in every derived game |
 | `src/game/` | Pixi application, orientation-adaptive stage, demo scene, particles, and tweens |
 | `src/dev/` | Development-only screen previews and session tuning/diagnostics |
 | `src/rendering/` | Lazy Three-only and Three + Pixi composition references |
@@ -293,6 +299,10 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
   browser safe-area values protect every edge. The production config declares
   `Both`; `orientationchange` re-reads RUN/ViewDeck insets without reloading or
   resetting the current game.
+- Original portrait and landscape PNG backdrops establish a real mobile-casual
+  art target. The active orientation is preloaded, its independently composed
+  alternate is deferred, and both render crop-safe with `cover` rather than
+  stretching one image across incompatible aspect ratios.
 - The procedural demo exercises sprite animation, tweens, particles, cleanup,
   reduced motion, quality scaling, lifecycle pause/resume, and generated audio.
 - Versioned persistence validates untrusted save fields and serializes/coalesces
@@ -370,6 +380,13 @@ replacing the neutral headless model with a derived game's real rules.
 - [`docs/rendering-architecture.md`](docs/rendering-architecture.md) explains
   when to use Pixi, Three.js, or both without duplicating the application
   foundation or treating the reference demo as a copyable game.
+- [`docs/visual-assets.md`](docs/visual-assets.md) records the real PNG asset
+  brief, generation provenance, loading/rotation pattern, crop policy, and the
+  rules for replacing temporary art with a derived game's own visual identity.
+- [`docs/randomness.md`](docs/randomness.md) defines the required `NoiseRandom`
+  path for seeded, position-based integers, floats, booleans, procedural
+  generation, replay, and save/resume while preserving SyncPlay's server-owned
+  RNG boundary.
 - [`docs/rundot-cli.md`](docs/rundot-cli.md) is the CLI command/safety atlas.
 - [`docs/social-k-factor.md`](docs/social-k-factor.md) explains how to make
   invitation, co-op, challenge, and relay loops feel like play while measuring

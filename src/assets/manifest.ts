@@ -1,7 +1,8 @@
 /**
  * Asset manifest — the single place that lists what gets loaded and when.
- * Files live in public/ and use page-relative URLs so deployed subdirectories
- * work without special handling.
+ * Imported assets live under src/assets/ so Vite fingerprints them and
+ * resolves deployment-safe URLs. Use public/ only for files that require an
+ * exact, stable name.
  *
  * Two tiers (pattern from a shipped RUN game):
  *   - 'critical'  — awaited during the loading screen. Everything the first
@@ -13,6 +14,8 @@
  * Keep 'critical' small: every asset here delays first interaction.
  */
 import type { AssetsManifest, UnresolvedAsset } from "pixi.js";
+import portraitBackdropUrl from "./art/pixel-foundry-backdrop-portrait.png";
+import wideBackdropUrl from "./art/pixel-foundry-backdrop-wide.png";
 
 /**
  * A narrowing of Pixi's AssetsManifest: Pixi also allows `assets` to be a
@@ -23,18 +26,24 @@ export interface Manifest extends AssetsManifest {
     bundles: { name: string; assets: UnresolvedAsset[] }[];
 }
 
+const startsLandscape = window.matchMedia("(orientation: landscape)").matches;
+const activeBackdropUrl = startsLandscape ? wideBackdropUrl : portraitBackdropUrl;
+const alternateBackdropUrl = startsLandscape ? portraitBackdropUrl : wideBackdropUrl;
+
 export const MANIFEST: Manifest = {
     bundles: [
         {
             name: "critical",
-            assets: [
-                // ADAPT: first-screen art and sprites, for example:
-                // { alias: "player", src: "images/player.png" },
-            ],
+            // Load only the composition visible at boot. The stylesheet uses
+            // the same URL, so the browser cache satisfies both consumers.
+            assets: [{ alias: "menu-backdrop-active", src: activeBackdropUrl }],
         },
         {
             name: "deferred",
             assets: [
+                // Runtime rotation can reveal the other composition without a
+                // reload. Warm it after the first interactive screen is ready.
+                { alias: "menu-backdrop-alternate", src: alternateBackdropUrl },
                 // ADAPT: sub-screen backgrounds, later levels, and shop art.
             ],
         },

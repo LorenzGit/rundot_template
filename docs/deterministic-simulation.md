@@ -12,7 +12,7 @@ npm run simulate
 
 It demonstrates:
 
-- a seeded pseudorandom number generator;
+- the shared, position-based `NoiseRandom` generator for ordinary game logic;
 - byte-stable replay from the same seed;
 - hundreds of headless sessions in one command;
 - basic outcome, score-distribution, and variety guardrails;
@@ -35,6 +35,11 @@ Select measurements that can invalidate the design:
 
 Keep test seeds with every regression. For procedural content, test both a
 curated seed set and a broad deterministic sweep.
+
+Read [`randomness.md`](randomness.md) before adding random decisions.
+Single-player and local game logic uses `NoiseRandom`; authoritative RUN
+SyncPlay simulations use the SDK's server-owned deterministic random and noise
+surfaces instead.
 
 ## Limits
 

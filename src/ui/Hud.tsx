@@ -15,24 +15,30 @@ export default function Hud() {
     const paused = useStore((s) => s.paused);
     return (
         <div className="pointer-events-none absolute inset-0 pt-safe-top">
-            <div className="flex items-start justify-between p-4">
+            <div className="game-hud">
                 {/* ADAPT: demo counter — replace with real HUD (currencies, wave, timer...) */}
-                <div className="rounded-xl bg-black/50 px-4 py-2 text-lg font-bold tabular-nums">Bounces: {score}</div>
+                <div className="hud-score">
+                    <span>BOUNCES</span>
+                    <strong>{score}</strong>
+                </div>
                 <button
                     type="button"
-                    className="pointer-events-auto rounded-xl bg-black/50 px-4 py-2 text-lg font-bold transition-transform active:scale-95"
+                    className="hud-menu pointer-events-auto"
                     onClick={() => {
                         audioManager.play("tap");
                         store.patch({ phase: "menu", menuScreen: "main" });
                         void saveSystem.flush();
                     }}
                 >
-                    Menu
+                    MENU
                 </button>
             </div>
             {paused && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-                    <p className="text-2xl font-bold">Paused</p>
+                <div className="pause-overlay">
+                    <div>
+                        <p className="eyebrow">TAKE A BREATH</p>
+                        <strong>PAUSED</strong>
+                    </div>
                 </div>
             )}
         </div>

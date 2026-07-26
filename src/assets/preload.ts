@@ -3,8 +3,8 @@
  * bundle, with progress), then background-loads the deferred bundle.
  *
  * Failure posture: a missing asset must never brick boot. Errors are logged
- * and boot continues. The default demo uses procedural graphics, so both
- * bundles intentionally start empty.
+ * and boot continues. The active orientation's menu art is critical; its
+ * alternate composition and later-game assets are deferred.
  */
 import { Assets } from "pixi.js";
 import { MANIFEST, CRITICAL_BUNDLES, DEFERRED_BUNDLES } from "./manifest.ts";

@@ -6,12 +6,12 @@
  * shared lab coordinator owns timing, visibility, and Pixi composition.
  */
 import * as THREE from "three/webgpu";
+import { ownThreeRenderer, type RendererLifecycleScope } from "../rendererLifecycle.ts";
 
 export interface ThreeReference {
     readonly backend: "THREE · WEBGPU" | "THREE · WEBGL 2";
     resize(width: number, height: number): void;
     render(elapsedSeconds: number): void;
-    destroy(): void;
 }
 
 interface ThreeReferenceOptions {
@@ -28,43 +28,73 @@ interface InitializedRenderer {
 
 type Disposable = { dispose(): void };
 
-async function initializeRenderer(maxPixelRatio: number, forceWebGL: boolean): Promise<InitializedRenderer> {
+async function initializeRenderer(
+    scope: RendererLifecycleScope,
+    maxPixelRatio: number,
+    requestedBackend: "auto" | "webgpu" | "webgl",
+): Promise<InitializedRenderer> {
     const renderer = new THREE.WebGPURenderer({
         alpha: false,
         antialias: true,
-        forceWebGL,
+        forceWebGL: requestedBackend === "webgl",
     });
+    const ownership = ownThreeRenderer(scope, renderer);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxPixelRatio));
     try {
         await renderer.init();
+        scope.throwIfCancelled();
     } catch (error) {
-        renderer.dispose();
+        await ownership.dispose();
         throw error;
     }
 
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     const backend = renderer.coordinateSystem === THREE.WebGPUCoordinateSystem ? "THREE · WEBGPU" : "THREE · WEBGL 2";
+    if (requestedBackend === "webgpu" && backend !== "THREE · WEBGPU") {
+        await ownership.dispose();
+        throw new Error("Three.js silently selected WebGL while strict WebGPU QA mode was requested");
+    }
+    if (requestedBackend === "webgl" && backend !== "THREE · WEBGL 2") {
+        await ownership.dispose();
+        throw new Error("Three.js did not honor strict WebGL QA mode");
+    }
     return { renderer, backend };
 }
 
-async function createRenderer(maxPixelRatio: number): Promise<InitializedRenderer> {
+async function createRenderer(scope: RendererLifecycleScope, maxPixelRatio: number): Promise<InitializedRenderer> {
     const forcedBackend = new URLSearchParams(window.location.search).get("renderer");
-    if (forcedBackend === "webgl") return initializeRenderer(maxPixelRatio, true);
+    if (forcedBackend === "webgl" || forcedBackend === "webgpu") {
+        return initializeRenderer(scope, maxPixelRatio, forcedBackend);
+    }
 
     try {
         // WebGPURenderer automatically falls back when WebGPU is absent. The
         // explicit retry also covers adapter/device failures during init.
-        return await initializeRenderer(maxPixelRatio, false);
+        return await initializeRenderer(scope, maxPixelRatio, "auto");
     } catch (webGpuError) {
+        scope.throwIfCancelled();
         console.warn("[renderer-lab] Three WebGPU initialization failed; retrying with WebGL 2", webGpuError);
-        return initializeRenderer(maxPixelRatio, true);
+        return initializeRenderer(scope, maxPixelRatio, "webgl");
     }
 }
 
-export async function createThreeReference(options: ThreeReferenceOptions): Promise<ThreeReference> {
-    const { renderer, backend } = await createRenderer(options.maxPixelRatio);
+export async function createThreeReference(
+    scope: RendererLifecycleScope,
+    options: ThreeReferenceOptions,
+): Promise<ThreeReference> {
+    const { renderer, backend } = await createRenderer(scope, options.maxPixelRatio);
     const resources: Disposable[] = [];
+    const world = new THREE.Scene();
+    const uiScene = new THREE.Scene();
+    let destroyed = false;
+    scope.manage(() => {
+        if (destroyed) return;
+        destroyed = true;
+        for (const resource of resources.reverse()) resource.dispose();
+        world.clear();
+        uiScene.clear();
+    });
     const track = <T extends Disposable>(resource: T): T => {
         resources.push(resource);
         return resource;
@@ -75,7 +105,6 @@ export async function createThreeReference(options: ThreeReferenceOptions): Prom
     renderer.domElement.setAttribute("aria-hidden", "true");
     options.host.appendChild(renderer.domElement);
 
-    const world = new THREE.Scene();
     world.background = new THREE.Color(0x07141c);
     world.fog = new THREE.Fog(0x07141c, 8, 23);
 
@@ -143,7 +172,6 @@ export async function createThreeReference(options: ThreeReferenceOptions): Prom
     );
     world.add(stars);
 
-    const uiScene = new THREE.Scene();
     const uiCamera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
     uiCamera.position.z = 2;
     const uiRoot = new THREE.Group();
@@ -191,8 +219,6 @@ export async function createThreeReference(options: ThreeReferenceOptions): Prom
         }
     }
 
-    let destroyed = false;
-
     return {
         backend,
 
@@ -237,16 +263,6 @@ export async function createThreeReference(options: ThreeReferenceOptions): Prom
                 renderer.render(uiScene, uiCamera);
                 renderer.autoClear = true;
             }
-        },
-
-        destroy() {
-            if (destroyed) return;
-            destroyed = true;
-            for (const resource of resources.reverse()) resource.dispose();
-            renderer.dispose();
-            renderer.domElement.remove();
-            world.clear();
-            uiScene.clear();
         },
     };
 }

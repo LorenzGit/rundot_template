@@ -6,13 +6,13 @@
  * competing tickers and keeping pause/visibility behavior deterministic.
  */
 import type { PixiOverlay } from "./pixi/createPixiOverlay.ts";
+import { acquireRendererRuntime, type RendererLease, type RendererLifecycleScope } from "./rendererLifecycle.ts";
 
 export type RendererLabMode = "three-only" | "hybrid";
 
 export interface RendererLab {
     readonly backend: string;
     setPaused(paused: boolean): void;
-    destroy(): void;
 }
 
 interface RendererLabOptions {
@@ -24,14 +24,10 @@ interface RendererLabOptions {
     signal: AbortSignal;
 }
 
-function throwIfAborted(signal: AbortSignal): void {
-    if (signal.aborted) throw new DOMException("Renderer lab initialization was cancelled", "AbortError");
-}
-
-export async function createRendererLab(options: RendererLabOptions): Promise<RendererLab> {
+async function initializeRendererLab(scope: RendererLifecycleScope, options: RendererLabOptions): Promise<RendererLab> {
     const threeModule = await import("./three/createThreeReference.ts");
-    throwIfAborted(options.signal);
-    const three = await threeModule.createThreeReference({
+    scope.throwIfCancelled();
+    const three = await threeModule.createThreeReference(scope, {
         host: options.host,
         maxPixelRatio: options.maxPixelRatio,
         reducedMotion: options.reducedMotion,
@@ -39,22 +35,16 @@ export async function createRendererLab(options: RendererLabOptions): Promise<Re
     });
 
     let pixi: PixiOverlay | null = null;
-    try {
-        if (options.mode === "hybrid") {
-            const pixiModule = await import("./pixi/createPixiOverlay.ts");
-            throwIfAborted(options.signal);
-            pixi = await pixiModule.createPixiOverlay({
-                host: options.host,
-                maxPixelRatio: options.maxPixelRatio,
-                reducedMotion: options.reducedMotion,
-            });
-        }
-        throwIfAborted(options.signal);
-    } catch (error) {
-        pixi?.destroy();
-        three.destroy();
-        throw error;
+    if (options.mode === "hybrid") {
+        const pixiModule = await import("./pixi/createPixiOverlay.ts");
+        scope.throwIfCancelled();
+        pixi = await pixiModule.createPixiOverlay(scope, {
+            host: options.host,
+            maxPixelRatio: options.maxPixelRatio,
+            reducedMotion: options.reducedMotion,
+        });
     }
+    scope.throwIfCancelled();
 
     let destroyed = false;
     let hostPaused = options.paused;
@@ -62,9 +52,16 @@ export async function createRendererLab(options: RendererLabOptions): Promise<Re
     const startedAt = performance.now();
 
     const render = (timeMs: number): void => {
-        const elapsedSeconds = Math.max(0, timeMs - startedAt) / 1000;
-        three.render(elapsedSeconds);
-        pixi?.render(elapsedSeconds);
+        try {
+            const elapsedSeconds = Math.max(0, timeMs - startedAt) / 1000;
+            three.render(elapsedSeconds);
+            pixi?.render(elapsedSeconds);
+        } catch (error) {
+            hostPaused = true;
+            if (frameId !== null) cancelAnimationFrame(frameId);
+            frameId = null;
+            scope.reportFailure(error);
+        }
     };
 
     const schedule = (): void => {
@@ -99,6 +96,14 @@ export async function createRendererLab(options: RendererLabOptions): Promise<Re
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(options.host);
     document.addEventListener("visibilitychange", syncVisibility);
+    scope.manage(() => {
+        if (destroyed) return;
+        destroyed = true;
+        if (frameId !== null) cancelAnimationFrame(frameId);
+        frameId = null;
+        resizeObserver.disconnect();
+        document.removeEventListener("visibilitychange", syncVisibility);
+    });
     resize();
     schedule();
 
@@ -116,16 +121,9 @@ export async function createRendererLab(options: RendererLabOptions): Promise<Re
                 schedule();
             }
         },
-
-        destroy() {
-            if (destroyed) return;
-            destroyed = true;
-            if (frameId !== null) cancelAnimationFrame(frameId);
-            frameId = null;
-            resizeObserver.disconnect();
-            document.removeEventListener("visibilitychange", syncVisibility);
-            pixi?.destroy();
-            three.destroy();
-        },
     };
+}
+
+export function createRendererLab(options: RendererLabOptions): Promise<RendererLease<RendererLab>> {
+    return acquireRendererRuntime("renderer-lab", options.signal, (scope) => initializeRendererLab(scope, options));
 }

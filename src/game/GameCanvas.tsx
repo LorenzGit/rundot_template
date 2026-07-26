@@ -3,9 +3,8 @@
  * the 'playing' phase); Pixi owns everything inside the canvas. No React
  * state flows in per-frame — game → UI communication goes through the store.
  *
- * StrictMode-safe: dev double-mount is handled by the `disposed` flag (the
- * first mount's async init resolves, sees it was cancelled, and destroys its
- * app before the second mount's app appears).
+ * StrictMode-safe: the realm-wide renderer lifecycle queue serializes the
+ * mount/cleanup/mount sequence, including initialization itself.
  */
 import { useEffect, useRef } from "react";
 import type { Application } from "pixi.js";
@@ -13,6 +12,32 @@ import { createPixiApp } from "./pixiApp.ts";
 import { createStage, type Stage } from "./stage.ts";
 import { createDemoScene, type Scene } from "./demoScene.ts";
 import { store, useStore } from "../state/store.ts";
+import {
+    acquireRendererRuntime,
+    type RendererLease,
+    type RendererLifecycleScope,
+} from "../rendering/rendererLifecycle.ts";
+
+interface GameRenderer {
+    app: Application;
+}
+
+async function initializeGameRenderer(scope: RendererLifecycleScope, host: HTMLElement): Promise<GameRenderer> {
+    const app = await createPixiApp(scope, host);
+    scope.throwIfCancelled();
+
+    // Design-resolution stage: scenes position in design units, not pixels.
+    const stage: Stage = createStage(app);
+    scope.manage(() => stage.destroy());
+
+    // ADAPT: replace the demo scene with the real game scene.
+    const scene: Scene = createDemoScene(app, stage);
+    scope.manage(() => scene.destroy());
+
+    // Respect a pause that landed while the canvas was initializing.
+    if (store.get().paused || document.hidden) app.ticker.stop();
+    return { app };
+}
 
 export default function GameCanvas() {
     const hostRef = useRef<HTMLDivElement | null>(null);
@@ -20,52 +45,32 @@ export default function GameCanvas() {
     const paused = useStore((s) => s.paused);
 
     useEffect(() => {
-        let disposed = false;
-        let scene: Scene | null = null;
-        let stage: Stage | null = null;
         const host = hostRef.current;
         if (!host) return;
+        const abortController = new AbortController();
+        let lease: RendererLease<GameRenderer> | null = null;
 
-        const initialize = async (): Promise<void> => {
-            const app = await createPixiApp(host);
-            if (disposed) {
-                app.destroy({ removeView: true }, { children: true });
-                return;
-            }
-            appRef.current = app;
-            // Design-resolution stage: scenes position in design units, not
-            // pixels, so layout is proportional on every device (stage.ts).
-            stage = createStage(app);
-            // ADAPT: replace the demo scene with the real game scene.
-            scene = createDemoScene(app, stage);
-            // Respect a pause that landed while the canvas was initializing.
-            if (store.get().paused || document.hidden) app.ticker.stop();
-        };
-        void initialize().catch((error) => {
-            if (disposed) return;
-            console.error("[renderer] Pixi initialization failed", error);
-            store.patch({
-                phase: "menu",
-                menuScreen: "main",
-                toast: "RENDERER UNAVAILABLE — TRY A DIFFERENT DEVICE",
+        void acquireRendererRuntime("pixi-game", abortController.signal, (scope) => initializeGameRenderer(scope, host))
+            .then((nextLease) => {
+                lease = nextLease;
+                appRef.current = nextLease.value.app;
+            })
+            .catch((error: unknown) => {
+                if (abortController.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) {
+                    return;
+                }
+                console.error("[renderer] Pixi initialization failed", error);
+                store.patch({
+                    phase: "menu",
+                    menuScreen: "main",
+                    toast: "RENDERER UNAVAILABLE — TRY A DIFFERENT DEVICE",
+                });
             });
-        });
+
         return () => {
-            disposed = true;
-            try {
-                scene?.destroy();
-            } catch {
-                /* scene already torn down */
-            }
-            try {
-                stage?.destroy();
-            } catch {
-                /* stage already torn down */
-            }
-            if (appRef.current) {
-                appRef.current.destroy({ removeView: true }, { children: true });
-                appRef.current = null;
-            }
+            abortController.abort();
+            appRef.current = null;
+            void lease?.release();
         };
     }, []);
 

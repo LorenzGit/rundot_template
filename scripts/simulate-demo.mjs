@@ -1,17 +1,24 @@
 import process from "node:process";
+import { createServer } from "vite";
 
 const SESSION_COUNT = 600;
 const BASE_SEED = 0x5eed1234;
 
-/** Small deterministic PRNG for simulations, replays, and reproducible tests. */
+// Execute the same TypeScript source that ships in the game. This keeps the
+// headless proof honest without maintaining a second JavaScript implementation.
+const sourceLoader = await createServer({
+    appType: "custom",
+    configFile: false,
+    logLevel: "silent",
+    server: { middlewareMode: true },
+});
+const { NoiseRandom } = await sourceLoader.ssrLoadModule("/src/game/noiseRandom.ts");
+await sourceLoader.close();
+
+/** Shared deterministic RNG for simulations, replays, and reproducible tests. */
 export function createSeededRandom(seed) {
-    let state = seed >>> 0 || 0x6d2b79f5;
-    return () => {
-        state ^= state << 13;
-        state ^= state >>> 17;
-        state ^= state << 5;
-        return (state >>> 0) / 0x1_0000_0000;
-    };
+    const random = new NoiseRandom(seed >>> 0, 0);
+    return () => random.nextDouble();
 }
 
 /**

@@ -23,7 +23,9 @@ export default function MenuScreenLayout({
         <main className="subscreen pt-safe-top pb-safe-bottom">
             <header className="subscreen-header">
                 <button type="button" className="back-button" onClick={() => void back()} aria-label={t("ButtonBack")}>
-                    ‹
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m15 5-7 7 7 7" />
+                    </svg>
                 </button>
                 <div>
                     <p className="eyebrow">{kicker}</p>

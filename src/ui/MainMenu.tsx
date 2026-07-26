@@ -6,14 +6,69 @@ import { dailySystems } from "../systems/dailySystems.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore, type MenuScreen } from "../state/store.ts";
 
-const destinations: Array<{ screen: MenuScreen; icon: string; label: string }> = [
-    { screen: "daily-rewards", icon: "07", label: "MenuDailyRewards" },
-    { screen: "daily-quests", icon: "Q", label: "MenuDailyQuests" },
-    { screen: "shop", icon: "RB", label: "MenuShop" },
-    { screen: "stats", icon: "#", label: "MenuStats" },
-    { screen: "run-features", icon: "RUN", label: "MenuRunFeatures" },
-    { screen: "settings", icon: "*", label: "MenuSettings" },
+type MenuIconName = "calendar" | "quests" | "shop" | "stats" | "run" | "settings";
+
+const destinations: Array<{
+    screen: MenuScreen;
+    icon: MenuIconName;
+    label: string;
+    accent: string;
+}> = [
+    { screen: "daily-rewards", icon: "calendar", label: "MenuDailyRewards", accent: "sunny" },
+    { screen: "daily-quests", icon: "quests", label: "MenuDailyQuests", accent: "mint" },
+    { screen: "shop", icon: "shop", label: "MenuShop", accent: "coral" },
+    { screen: "stats", icon: "stats", label: "MenuStats", accent: "sky" },
+    { screen: "run-features", icon: "run", label: "MenuRunFeatures", accent: "violet" },
+    { screen: "settings", icon: "settings", label: "MenuSettings", accent: "blue" },
 ];
+
+function MenuIcon({ name }: { name: MenuIconName }) {
+    if (name === "calendar") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 3v3M18 3v3M4 8h16M5 5h14a2 2 0 0 1 2 2v12H3V7a2 2 0 0 1 2-2Z" />
+                <path d="m8 14 2 2 5-5" />
+            </svg>
+        );
+    }
+    if (name === "quests") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 4h12v16H6zM9 8h6M9 12h6M9 16h4" />
+                <path d="M4 7h2M4 11h2M4 15h2" />
+            </svg>
+        );
+    }
+    if (name === "shop") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 9h14l-1 11H6L5 9Z" />
+                <path d="M8 10V7a4 4 0 0 1 8 0v3M9 14h6" />
+            </svg>
+        );
+    }
+    if (name === "stats") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 19V9h4v10M10 19V5h4v14M15 19v-7h4v7M3 19h18" />
+            </svg>
+        );
+    }
+    if (name === "run") {
+        return (
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3 6.5 6v6L12 15l5.5-3V6L12 3Z" />
+                <path d="m6.5 12-3 2v4l4 2.5 4.5-2.7V15M17.5 12l3 2v4l-4 2.5-4.5-2.7" />
+            </svg>
+        );
+    }
+    return (
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 8.2a3.8 3.8 0 1 0 0 7.6 3.8 3.8 0 0 0 0-7.6Z" />
+            <path d="m18.8 13.3 2-1.3-2-3.5-2.2.8a7 7 0 0 0-1.4-.8L14.8 6h-4l-.4 2.5a7 7 0 0 0-1.4.8l-2.2-.8-2 3.5 2 1.3v1.4l-2 1.3 2 3.5 2.2-.8c.4.3.9.6 1.4.8l.4 2.5h4l.4-2.5c.5-.2 1-.5 1.4-.8l2.2.8 2-3.5-2-1.3v-1.4Z" />
+        </svg>
+    );
+}
 
 async function activate(action: () => void): Promise<void> {
     await audioManager.unlock();
@@ -38,45 +93,62 @@ export default function MainMenu() {
 
     return (
         <main className="menu-shell pt-safe-top pb-safe-bottom">
-            <div className="menu-orbit menu-orbit-a" />
-            <div className="menu-orbit menu-orbit-b" />
             <header className="menu-header">
-                <p className="eyebrow">RUN / PIXI 8 / WEBGPU</p>
-                <h1>
-                    PIXEL
-                    <br />
-                    <span>FOUNDRY</span>
-                </h1>
+                <p className="eyebrow">RUN GAME STARTER</p>
+                <div className="menu-logo">
+                    <span className="menu-logo-top">PIXEL</span>
+                    <h1>FOUNDRY</h1>
+                    <span className="menu-logo-bolt" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="m13.5 2-8 12h6l-1 8 8-12h-6l1-8Z" />
+                        </svg>
+                    </span>
+                </div>
                 <p className="menu-subtitle">{t("MenuSubtitle")}</p>
             </header>
 
             <section className="player-strip" aria-label="Player summary">
-                <span>LV {level}</span>
-                <span>{coins.toLocaleString()} COINS</span>
+                <div className="player-level">
+                    <span className="player-avatar" aria-hidden="true">
+                        <span />
+                        <span />
+                    </span>
+                    <span>LEVEL {level}</span>
+                </div>
+                <div className="player-currency">
+                    <span className="coin-glyph" aria-hidden="true">
+                        C
+                    </span>
+                    <strong>{coins.toLocaleString()}</strong>
+                </div>
             </section>
 
             <button type="button" className="play-button" onClick={play}>
                 <span>{t("ButtonPlay")}</span>
-                <span aria-hidden="true">▶</span>
+                <span className="play-glyph" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m9 6 9 6-9 6V6Z" />
+                    </svg>
+                </span>
             </button>
 
             <nav className="menu-grid" aria-label="Game menus">
-                {destinations.map(({ screen, icon, label }) => (
+                {destinations.map(({ screen, icon, label, accent }) => (
                     <button
                         type="button"
-                        className="menu-tile"
+                        className={`menu-tile menu-tile-${accent}`}
                         key={screen}
                         onClick={() => void activate(() => store.patch({ menuScreen: screen }))}
                     >
                         <span className="menu-icon" aria-hidden="true">
-                            {icon}
+                            <MenuIcon name={icon} />
                         </span>
                         <span>{t(label)}</span>
                     </button>
                 ))}
             </nav>
 
-            <p className="template-stamp">TEMPLATE PLACEHOLDER IDENTITY · v{packageJson.version}</p>
+            <p className="template-stamp">REFERENCE DEMO · v{packageJson.version}</p>
         </main>
     );
 }

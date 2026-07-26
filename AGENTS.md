@@ -13,6 +13,15 @@ audio, IDs, or presentation merely because they exist here. Do not reproduce
 another game’s distinctive mechanics or presentation by using this template as
 a copy-paste source.
 
+The reference menu intentionally uses original portrait and landscape PNG art
+to establish the quality bar. Do not regress a derived game to anonymous CSS
+gradients, emoji, or improvised placeholder shapes as its final presentation.
+Write the game's own visual brief, replace both compositions, preserve image
+aspect ratios, document crop-safe regions, and keep required UI independent
+from raster art. Read [`docs/visual-assets.md`](docs/visual-assets.md) and
+[`docs/multi-resolution.md`](docs/multi-resolution.md) before changing art or
+its fit policy.
+
 Every ship-track game derived from this template must implement both purchase
 monetization and ads. Infer the best products, value, ad formats, placements,
 timing, limits, and presentation from that game's audience, loop, economy,
@@ -21,12 +30,32 @@ example offers or stop at SDK wrappers, placeholders, disabled UI, diagnostics,
 or recommendations. A prototype may defer both until ship-track promotion, and
 an explicit owner instruction may narrow or override the model.
 
+Use the `NoiseRandom` class in `src/game/noiseRandom.ts` for ordinary random
+numbers in game logic and procedural generation; never add `Math.random()` to
+game source. Inject and persist its unsigned seed and position when a sequence
+must replay or resume, and use stable salts for independent decisions. This
+rule does not apply to cryptographic/security identifiers, which use Web
+Crypto, or authoritative RUN SyncPlay code, which must use the SDK's
+server-owned `ctx.random` and certified noise functions. Read
+`docs/randomness.md` before adding game randomness.
+
 Keep lifecycle, safe-area, accessibility, persistence, capability-gated RUN
 integration, authoritative outcomes, and cleanup generic. Do not duplicate
 those application services per renderer. A hybrid game uses one frame clock,
 one resize/lifecycle coordinator, and explicit input ownership. Read
 [`docs/rendering-architecture.md`](docs/rendering-architecture.md) before
 changing renderer composition.
+
+All renderer creation and destruction must go through the realm-wide manager in
+`src/rendering/rendererLifecycle.ts`. It serializes initialization, fallback,
+cancellation cleanup, and teardown so React StrictMode, route changes, HMR, and
+ViewDeck lifecycle events cannot overlap runtimes. A runtime may own one Pixi
+application, one Three renderer, or an intentional coordinated pair; never
+create another renderer owner or call `Application.destroy()` /
+`renderer.dispose()` outside that manager. Forced `?renderer=webgpu` QA is
+strict and unexpected rendering errors or device loss are failures. Preserve
+the regression coverage and read the complete contract in
+[`docs/rendering-architecture.md`](docs/rendering-architecture.md).
 
 When a derived game selects:
 

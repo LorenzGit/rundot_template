@@ -9,6 +9,19 @@ function read(relativePath) {
     return fs.readFileSync(path.join(root, relativePath), "utf8");
 }
 
+function inspectPng(relativePath) {
+    const bytes = fs.readFileSync(path.join(root, relativePath));
+    const signature = "89504e470d0a1a0a";
+    expect(bytes.subarray(0, 8).toString("hex") === signature, `${relativePath} is not a valid PNG`);
+    return {
+        width: bytes.readUInt32BE(16),
+        height: bytes.readUInt32BE(20),
+        bitDepth: bytes[24],
+        colorType: bytes[25],
+        bytes: bytes.length,
+    };
+}
+
 function expect(condition, message) {
     if (!condition) failures.push(message);
 }
@@ -73,9 +86,11 @@ const saveSystem = read("src/systems/save.ts");
 const runSdk = read("src/sdk/runSdk.ts");
 const main = read("src/main.tsx");
 const app = read("src/ui/App.tsx");
+const gameCanvas = read("src/game/GameCanvas.tsx");
 const pixiApp = read("src/game/pixiApp.ts");
 const stage = read("src/game/stage.ts");
 const rendererLab = read("src/rendering/createRendererLab.ts");
+const rendererLifecycle = read("src/rendering/rendererLifecycle.ts");
 const threeReference = read("src/rendering/three/createThreeReference.ts");
 const pixiOverlay = read("src/rendering/pixi/createPixiOverlay.ts");
 const multiResolution = read("docs/multi-resolution.md");
@@ -91,7 +106,12 @@ const developmentPreview = read("src/dev/preview.ts");
 const developmentTools = read("src/dev/DevelopmentTools.tsx");
 const verificationGuide = read("docs/verification.md");
 const deterministicSimulationGuide = read("docs/deterministic-simulation.md");
+const randomnessGuide = read("docs/randomness.md");
+const visualAssetsGuide = read("docs/visual-assets.md");
 const simulation = read("scripts/simulate-demo.mjs");
+const noiseRandom = read("src/game/noiseRandom.ts");
+const particles = read("src/game/particles.ts");
+const assetManifest = read("src/assets/manifest.ts");
 const publicAudit = read("scripts/audit-public.mjs");
 const e2eSmoke = read("e2e/template.smoke.spec.ts");
 const buildCheck = read("scripts/check-build.mjs");
@@ -193,17 +213,20 @@ for (const required of [
     "docs/deterministic-simulation.md",
     "docs/monetization.md",
     "docs/multi-resolution.md",
+    "docs/randomness.md",
     "docs/rendering-architecture.md",
     "docs/run-capabilities.md",
     "docs/rundot-cli.md",
     "docs/runtime.md",
     "docs/verification.md",
+    "docs/visual-assets.md",
     "e2e/fixtures.ts",
     "e2e/template.smoke.spec.ts",
     "playwright.config.ts",
     "scripts/audit-public.mjs",
     "scripts/check-build.mjs",
     "scripts/simulate-demo.mjs",
+    "scripts/test-noise-random.mjs",
     "additional_features/README.md",
     "additional_features/client/commerce.ts",
     "additional_features/client/navigation.ts",
@@ -227,12 +250,16 @@ for (const required of [
     "additional_features/config/simulation/recipes.json",
     "rundot/realtime.config.json",
     "src/assets/strings.csv",
+    "src/assets/art/pixel-foundry-backdrop-portrait.png",
+    "src/assets/art/pixel-foundry-backdrop-wide.png",
     "src/dev/DevelopmentTools.tsx",
     "src/dev/preview.ts",
     "src/game/particles.ts",
+    "src/game/noiseRandom.ts",
     "src/game/tween.ts",
     "src/rendering/createRendererLab.ts",
     "src/rendering/pixi/createPixiOverlay.ts",
+    "src/rendering/rendererLifecycle.ts",
     "src/rendering/three/createThreeReference.ts",
     "src/sdk/featureLab.ts",
     "src/systems/serverTime.ts",
@@ -243,6 +270,50 @@ for (const required of [
     expect(fs.existsSync(path.join(root, required)), `required reference is missing: ${required}`);
 }
 
+const portraitBackdrop = inspectPng("src/assets/art/pixel-foundry-backdrop-portrait.png");
+const wideBackdrop = inspectPng("src/assets/art/pixel-foundry-backdrop-wide.png");
+expect(
+    portraitBackdrop.width === 1024 && portraitBackdrop.height === 1536,
+    "portrait backdrop must preserve its reviewed 2:3 source dimensions",
+);
+expect(
+    wideBackdrop.width === 1536 && wideBackdrop.height === 1024,
+    "wide backdrop must preserve its reviewed 3:2 source dimensions",
+);
+for (const [name, metadata] of [
+    ["portrait", portraitBackdrop],
+    ["wide", wideBackdrop],
+]) {
+    expect(metadata.bitDepth === 8 && metadata.colorType === 2, `${name} backdrop must remain an 8-bit RGB PNG`);
+    expect(metadata.bytes <= 2_500_000, `${name} backdrop exceeds the reviewed 2.5 MB source budget`);
+}
+expect(
+    assetManifest.includes('window.matchMedia("(orientation: landscape)")') &&
+        assetManifest.includes("menu-backdrop-active") &&
+        assetManifest.includes("menu-backdrop-alternate"),
+    "asset manifest must preload the active backdrop and defer its orientation alternate",
+);
+expect(
+    appStyles.includes('url("../assets/art/pixel-foundry-backdrop-portrait.png")') &&
+        appStyles.includes('url("../assets/art/pixel-foundry-backdrop-wide.png")') &&
+        appStyles.includes("background-size:") &&
+        appStyles.includes("cover"),
+    "stylesheet must select both original backdrop compositions without stretching",
+);
+expect(
+    visualAssetsGuide.includes("real, original PNG artwork") &&
+        visualAssetsGuide.includes("calm central 45%") &&
+        visualAssetsGuide.includes("separate compositions") &&
+        visualAssetsGuide.includes("Never stretch one image"),
+    "visual asset provenance, crop safety, and aspect-ratio guidance are incomplete",
+);
+expect(
+    localAgents.includes("original portrait and landscape PNG art") &&
+        localAgents.includes("docs/visual-assets.md") &&
+        localAgents.includes("document crop-safe regions"),
+    "AGENTS.md must preserve the authored-art quality and aspect-ratio workflow",
+);
+
 expect(
     /^name:\s*img2threejs$/m.test(img2threejsSkill) && /^\s+version:\s*["']1\.3\.0["']$/m.test(img2threejsSkill),
     "vendored img2threejs skill identity or reviewed version changed",
@@ -251,6 +322,31 @@ expect(
     localAgents.includes(".agents/skills/img2threejs/SKILL.md") && localAgents.includes("not a runtime dependency"),
     "AGENTS.md must route and scope the project-local img2threejs skill",
 );
+expect(
+    localAgents.includes("NoiseRandom") && localAgents.includes("Math.random()") && localAgents.includes("ctx.random"),
+    "AGENTS.md must require NoiseRandom while preserving the SyncPlay RNG authority boundary",
+);
+expect(
+    randomnessGuide.includes("NoiseRandom.randomize(seed, position, salt)") &&
+        randomnessGuide.includes("Do not use `Math.random()`") &&
+        randomnessGuide.includes("ctx.random"),
+    "deterministic randomness guidance is incomplete",
+);
+expect(
+    noiseRandom.includes("Math.imul") &&
+        noiseRandom.includes("0xb529_7a4d") &&
+        noiseRandom.includes("0x68e3_1da4") &&
+        noiseRandom.includes("0x1b56_c4e9"),
+    "NoiseRandom must preserve the reviewed C# uint32 noise constants and multiplication semantics",
+);
+expect(
+    particles.includes('import { NoiseRandom } from "./noiseRandom.ts"') &&
+        particles.includes("random = new NoiseRandom()"),
+    "template particle randomness must use NoiseRandom",
+);
+for (const sourceFile of sourceFiles("src")) {
+    expect(!read(sourceFile).includes("Math.random("), `${sourceFile} must use NoiseRandom instead of Math.random()`);
+}
 expect(
     thirdPartyNotices.includes("7b1c62ccf34957ac5d68b7863718af9eab777c7e") &&
         thirdPartyNotices.includes(".agents/skills/img2threejs/LICENSE"),
@@ -438,9 +534,33 @@ expect(
     "host crashes need a final rejection guard",
 );
 expect(
-    pixiApp.includes('initializeRenderer(host, "webgpu")') && pixiApp.includes('initializeRenderer(host, "webgl")'),
+    pixiApp.includes('initializeRenderer(scope, host, "webgpu")') &&
+        pixiApp.includes('initializeRenderer(scope, host, "webgl")'),
     "default Pixi initialization must explicitly retry WebGL after a WebGPU device failure",
 );
+expect(
+    gameCanvas.includes('acquireRendererRuntime("pixi-game"') &&
+        rendererLab.includes('acquireRendererRuntime("renderer-lab"'),
+    "every renderer composition must acquire the realm-wide lifecycle queue",
+);
+expect(
+    rendererLifecycle.includes('Symbol.for("rundot.renderer-lifecycle")') &&
+        rendererLifecycle.includes("maximumConcurrentInitializations") &&
+        rendererLifecycle.includes('scope.signal.aborted || info.reason === "destroyed"'),
+    "renderer lifecycle must remain realm-stable, observable, and device-loss aware",
+);
+for (const sourceFile of sourceFiles("src")) {
+    if (sourceFile === "src/rendering/rendererLifecycle.ts") continue;
+    const contents = read(sourceFile);
+    expect(
+        !contents.includes("app.destroy("),
+        `${sourceFile} destroys a Pixi Application outside the lifecycle manager`,
+    );
+    expect(
+        !contents.includes("renderer.dispose("),
+        `${sourceFile} destroys a Three renderer outside the lifecycle manager`,
+    );
+}
 expect(
     rendererLab.includes('import("./three/createThreeReference.ts")') &&
         rendererLab.includes('import("./pixi/createPixiOverlay.ts")'),
@@ -455,7 +575,9 @@ expect(
 expect(
     threeReference.includes("new THREE.WebGPURenderer") &&
         threeReference.includes("forceWebGL") &&
-        threeReference.includes("renderer.clearDepth()"),
+        threeReference.includes("renderer.clearDepth()") &&
+        threeReference.includes('requestedBackend === "webgpu"') &&
+        threeReference.includes("strict WebGPU QA mode"),
     "Three-only reference must include WebGPU/WebGL selection and a Three-rendered UI pass",
 );
 expect(
@@ -560,6 +682,9 @@ for (const requirement of [
     "Three + Pixi",
     "npm run dev",
     "one frame clock",
+    "Serialized renderer ownership",
+    "?renderer=webgpu",
+    "GPUDevice.lost",
     "10 CSS pixels",
     "Derive; do not copy",
 ]) {
@@ -608,6 +733,7 @@ for (const browserContract of [
 }
 expect(
     simulation.includes("createSeededRandom") &&
+        simulation.includes('ssrLoadModule("/src/game/noiseRandom.ts")') &&
         simulation.includes("Identical seeds must produce identical sessions") &&
         deterministicSimulationGuide.includes("cannot prove"),
     "deterministic simulation must preserve reproducibility and honest limits",

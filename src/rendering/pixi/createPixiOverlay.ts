@@ -5,12 +5,12 @@
  * second ticker. It renders transparent 2D feedback above the Three canvas.
  */
 import { Application, Container, Graphics } from "pixi.js";
+import { monitorPixiWebGpuDevice, ownPixiApplication, type RendererLifecycleScope } from "../rendererLifecycle.ts";
 
 export interface PixiOverlay {
     readonly backend: "PIXI · WEBGPU" | "PIXI · WEBGL";
     resize(width: number, height: number): void;
     render(elapsedSeconds: number): void;
-    destroy(): void;
 }
 
 interface PixiOverlayOptions {
@@ -21,8 +21,17 @@ interface PixiOverlayOptions {
 
 type RendererPreference = "webgpu" | "webgl";
 
-async function initializePixi(preference: RendererPreference, maxPixelRatio: number): Promise<Application> {
+function rendererBackend(app: Application): RendererPreference {
+    return app.renderer.constructor.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
+}
+
+async function initializePixi(
+    scope: RendererLifecycleScope,
+    preference: RendererPreference,
+    maxPixelRatio: number,
+): Promise<Application> {
     const app = new Application();
+    const ownership = ownPixiApplication(scope, app);
     try {
         await app.init({
             preference,
@@ -35,31 +44,37 @@ async function initializePixi(preference: RendererPreference, maxPixelRatio: num
             backgroundAlpha: 0,
             antialias: true,
         });
+        scope.throwIfCancelled();
+        const initializedBackend = rendererBackend(app);
+        if (initializedBackend !== preference) {
+            throw new Error(`Pixi initialized ${initializedBackend} while strict ${preference} was requested`);
+        }
+        if (initializedBackend === "webgpu") monitorPixiWebGpuDevice(scope, app, "Pixi hybrid overlay");
         return app;
     } catch (error) {
-        try {
-            app.destroy({ removeView: true }, { children: true });
-        } catch {
-            // Initialization can fail before Pixi has a renderer to destroy.
-        }
+        await ownership.dispose();
         throw error;
     }
 }
 
-async function createPixi(maxPixelRatio: number): Promise<Application> {
+async function createPixi(scope: RendererLifecycleScope, maxPixelRatio: number): Promise<Application> {
     const requested = new URLSearchParams(window.location.search).get("renderer");
-    if (requested === "webgl" || requested === "webgpu") return initializePixi(requested, maxPixelRatio);
+    if (requested === "webgl" || requested === "webgpu") return initializePixi(scope, requested, maxPixelRatio);
 
     try {
-        return await initializePixi("webgpu", maxPixelRatio);
+        return await initializePixi(scope, "webgpu", maxPixelRatio);
     } catch (webGpuError) {
+        scope.throwIfCancelled();
         console.warn("[renderer-lab] Pixi WebGPU initialization failed; retrying with WebGL", webGpuError);
-        return initializePixi("webgl", maxPixelRatio);
+        return initializePixi(scope, "webgl", maxPixelRatio);
     }
 }
 
-export async function createPixiOverlay(options: PixiOverlayOptions): Promise<PixiOverlay> {
-    const app = await createPixi(options.maxPixelRatio);
+export async function createPixiOverlay(
+    scope: RendererLifecycleScope,
+    options: PixiOverlayOptions,
+): Promise<PixiOverlay> {
+    const app = await createPixi(scope, options.maxPixelRatio);
     app.canvas.className = "renderer-lab-canvas renderer-lab-overlay";
     app.canvas.dataset.layer = "pixi-ui";
     app.canvas.setAttribute("aria-hidden", "true");
@@ -74,7 +89,6 @@ export async function createPixiOverlay(options: PixiOverlayOptions): Promise<Pi
 
     let width = 1;
     let height = 1;
-    let destroyed = false;
 
     function redraw(): void {
         const margin = Math.max(16, Math.min(width, height) * 0.075);
@@ -121,10 +135,9 @@ export async function createPixiOverlay(options: PixiOverlayOptions): Promise<Pi
     }
 
     return {
-        backend: app.renderer.constructor.name.toLowerCase().includes("webgpu") ? "PIXI · WEBGPU" : "PIXI · WEBGL",
+        backend: rendererBackend(app) === "webgpu" ? "PIXI · WEBGPU" : "PIXI · WEBGL",
 
         resize(nextWidth, nextHeight) {
-            if (destroyed) return;
             width = Math.max(1, nextWidth);
             height = Math.max(1, nextHeight);
             app.renderer.resize(width, height, Math.min(window.devicePixelRatio || 1, options.maxPixelRatio));
@@ -132,19 +145,12 @@ export async function createPixiOverlay(options: PixiOverlayOptions): Promise<Pi
         },
 
         render(elapsedSeconds) {
-            if (destroyed) return;
             const time = options.reducedMotion ? 0.5 : elapsedSeconds;
             const travel = Math.max(1, width - Math.max(32, Math.min(width, height) * 0.15));
             scanner.x = (width - travel) / 2 + ((Math.sin(time * 0.9) + 1) / 2) * travel;
             reticle.alpha = 0.78 + Math.sin(time * 2.1) * 0.16;
             reticle.rotation = Math.sin(time * 0.45) * 0.09;
             app.render();
-        },
-
-        destroy() {
-            if (destroyed) return;
-            destroyed = true;
-            app.destroy({ removeView: true }, { children: true });
         },
     };
 }

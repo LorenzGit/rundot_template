@@ -51,9 +51,10 @@ npm run test:e2e:headed
 
 The suite exercises representative portrait, landscape, tablet, and desktop
 viewports; direct screen previews; scroll reachability; orientation-change
-safe-area refresh; state preservation; and console, page, and critical request
-failures. Assertions use visible UI and the development-only semantic QA
-contract.
+safe-area refresh; state preservation; StrictMode and route-change renderer
+serialization; hybrid renderer ownership; and console, page, GPU, and critical
+request failures. Assertions use visible UI, lifecycle diagnostics, and the
+development-only semantic QA contract.
 
 Browser tests never prove a real ad, purchase, entitlement, notification,
 profile, or host capability. Verify those separately through the opt-in RUN

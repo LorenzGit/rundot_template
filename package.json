@@ -1,6 +1,6 @@
 {
   "name": "rundot_template",
-  "version": "0.10.1",
+  "version": "0.10.3",
   "description": "Production-minded RUN.world reference with PixiJS, Three.js, and hybrid WebGPU-first patterns.",
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
@@ -24,7 +24,7 @@
     "format:check": "biome format .",
     "lint": "biome lint src additional_features e2e scripts playwright.config.ts vite.config.js --diagnostic-level=error --max-diagnostics=none",
     "typecheck": "tsc --noEmit && tsc --project tsconfig.additional-features.json --noEmit",
-    "test": "node scripts/check-template.mjs && node scripts/simulate-demo.mjs",
+    "test": "node scripts/check-template.mjs && node scripts/test-noise-random.mjs && node scripts/simulate-demo.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "simulate": "node scripts/simulate-demo.mjs",

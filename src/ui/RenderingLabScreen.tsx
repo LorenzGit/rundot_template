@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { audioManager } from "../audio/audioManager.ts";
 import { createRendererLab, type RendererLab, type RendererLabMode } from "../rendering/createRendererLab.ts";
+import type { RendererLease } from "../rendering/rendererLifecycle.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
@@ -22,7 +23,7 @@ const MODE_COPY: Record<RendererLabMode, { title: string; description: string; l
 
 export default function RenderingLabScreen() {
     const hostRef = useRef<HTMLDivElement | null>(null);
-    const labRef = useRef<RendererLab | null>(null);
+    const labRef = useRef<RendererLease<RendererLab> | null>(null);
     const paused = useStore((state) => state.paused);
     const quality = useStore((state) => state.quality);
     const reducedMotion = useStore((state) => state.reducedMotion);
@@ -46,14 +47,14 @@ export default function RenderingLabScreen() {
             reducedMotion,
             signal: abortController.signal,
         })
-            .then((lab) => {
+            .then((lease) => {
                 if (disposed) {
-                    lab.destroy();
+                    void lease.release();
                     return;
                 }
-                labRef.current = lab;
-                lab.setPaused(store.get().paused);
-                setStatus(lab.backend);
+                labRef.current = lease;
+                lease.value.setPaused(store.get().paused);
+                setStatus(lease.value.backend);
             })
             .catch((error: unknown) => {
                 if (disposed || (error instanceof DOMException && error.name === "AbortError")) return;
@@ -65,13 +66,13 @@ export default function RenderingLabScreen() {
         return () => {
             disposed = true;
             abortController.abort();
-            labRef.current?.destroy();
+            void labRef.current?.release();
             labRef.current = null;
         };
     }, [mode, quality, reducedMotion]);
 
     useEffect(() => {
-        labRef.current?.setPaused(paused);
+        labRef.current?.value.setPaused(paused);
     }, [paused]);
 
     const selectMode = async (nextMode: RendererLabMode): Promise<void> => {

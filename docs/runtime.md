@@ -29,6 +29,14 @@
 - Default renderer selection tries WebGPU initialization, not just feature
   detection, and retries with a fresh WebGL application if adapter/device setup
   fails. Forced `?renderer=` modes never fall back so QA failures stay visible.
+- One realm-wide renderer lifecycle queue owns initialization, fallback,
+  cancellation cleanup, and teardown for the Pixi game and Three/Pixi Rendering
+  Lab. React StrictMode and route changes cannot overlap renderer runtimes;
+  renderer destruction is never called directly by screen components.
+- Unexpected Pixi WebGPU device loss and uncaptured GPU errors are surfaced as
+  renderer failures. Three's WebGPU backend reports the same conditions through
+  its renderer error callbacks. Intentional device destruction during
+  manager-owned teardown is not a failure.
 - The design stage is orientation-adaptive: portrait fixes the 720-unit width,
   landscape fixes the 720-unit height, and the long edge remains fluid. Scene
   resize handlers re-read both design dimensions after rotation.

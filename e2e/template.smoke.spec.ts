@@ -5,6 +5,14 @@ interface QaSnapshot {
     phase: "loading" | "menu" | "playing";
     menuScreen: string;
     coins: number;
+    rendererLifecycle: {
+        activeLabel: string | null;
+        activeRuntimes: number;
+        initializing: boolean;
+        maximumActiveRuntimes: number;
+        maximumConcurrentInitializations: number;
+        failureCount: number;
+    };
 }
 
 const viewports = [
@@ -138,6 +146,36 @@ test("orientation changes refresh safe areas without losing game state", async (
         .poll(async () => Number((await page.locator("html").getAttribute("data-safe-area-refresh-count")) ?? 0))
         .toBeGreaterThan(refreshLandscape);
     expect((await readQaSnapshot(page)).phase).toBe("playing");
+});
+
+test("renderer lifecycle serializes StrictMode, route changes, and hybrid mode", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=game&renderer=webgl");
+    await expect(page.locator("canvas[data-renderer='webgl']")).toHaveCount(1);
+    await expect.poll(async () => (await readQaSnapshot(page)).rendererLifecycle.activeLabel).toBe("pixi-game");
+
+    for (let cycle = 0; cycle < 2; cycle += 1) {
+        await page.evaluate(() => globalThis.__gameQa?.returnToMenu());
+        await expect(page.locator("canvas")).toHaveCount(0);
+        await expect.poll(async () => (await readQaSnapshot(page)).rendererLifecycle.activeRuntimes).toBe(0);
+
+        await page.evaluate(() => globalThis.__gameQa?.openRendererLab());
+        await expect(page.getByRole("heading", { name: "RENDERING LAB" })).toBeVisible();
+        await expect(page.locator(".renderer-lab-status")).toContainText("THREE · WEBGL 2");
+        await expect.poll(async () => (await readQaSnapshot(page)).rendererLifecycle.activeLabel).toBe("renderer-lab");
+
+        await page.getByRole("button", { name: "THREE + PIXI" }).click();
+        await expect(page.locator(".renderer-lab-status")).toContainText("THREE · WEBGL 2 + PIXI · WEBGL");
+        await expect(page.locator(".renderer-lab-canvas")).toHaveCount(2);
+
+        await page.evaluate(() => globalThis.__gameQa?.returnToMenu());
+        await expect(page.locator("canvas")).toHaveCount(0);
+    }
+
+    const lifecycle = (await readQaSnapshot(page)).rendererLifecycle;
+    expect(lifecycle.maximumActiveRuntimes).toBe(1);
+    expect(lifecycle.maximumConcurrentInitializations).toBe(1);
+    expect(lifecycle.failureCount).toBe(0);
 });
 
 test("development diagnostics tune only the current session", async ({ page }) => {
