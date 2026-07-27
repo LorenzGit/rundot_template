@@ -24,8 +24,10 @@ Nothing here is imported by the default client bundle. It is typechecked by
   browser capabilities; permission prompts remain explicitly player initiated.
 - `client/assets.ts` — RUN-hosted asset loading and cache cleanup.
 - `client/notifications.ts` — RCS consent and cross-channel messaging.
-- `client/commerce.ts` — direct-purchase discovery, currency spending,
-  subscription checkout, and entitlement consumption.
+- `client/commerce.ts` — optional direct-fiat purchase discovery, low-level Run
+  Bits spending, subscription checkout, and entitlement consumption. These are
+  additions or accepted-risk exceptions; a production game defaults its
+  required Run Bits product to Shop + Entitlements.
 - `client/progression.ts` — leaderboard reads, stats/leaderboard writes, simulation recipes, and
   VIP collectible claims.
 - `client/content.ts` — UGC, files, clips (including optional reaction camera/microphone), and native video.

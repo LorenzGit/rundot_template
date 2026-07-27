@@ -74,9 +74,9 @@ autoplay. These are browser features, not additional SDK namespaces.
 - Haptics use root `triggerHapticAsync()` plus
   `system.getDevice().haptics`; there is no runtime `haptics` namespace in SDK
   5.24. A guarded web-vibration fallback may report unavailable.
-- Ads return `verified | unavailable | cancelled | failed`; Shop returns the
-  same recoverable result union. Only `verified` may proceed to
-  placement-specific reconciliation or grant logic.
+- Ads return `verified | unavailable | cancelled | failed`; Run Bits Shop
+  checkout returns the same recoverable result union. Only `verified` may
+  proceed to placement-specific reconciliation or grant logic.
 
 ## LiveOps keys
 
@@ -86,6 +86,7 @@ Only the following bounded client-visible values are consumed:
 - `runtime.dailyQuestsEnabled` boolean
 - `runtime.notificationDelaySeconds` number clamped to 1 hour through 7 days
 - `runtime.monetization.adsEnabled` boolean, additionally blocked by host capability; ad placement IDs are self-authored and must be renamed per derived game
-- `runtime.monetization.shopEnabled` boolean, additionally blocked by item/entitlement placeholders and capability
+- `runtime.monetization.shopEnabled` boolean, additionally blocked by Run Bits
+  Shop item/entitlement placeholders and capability
 
 Never place secrets, entitlement ownership, trusted rewards, or anti-cheat decisions in client LiveOps.

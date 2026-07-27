@@ -22,13 +22,27 @@ from raster art. Read [`docs/visual-assets.md`](docs/visual-assets.md) and
 [`docs/multi-resolution.md`](docs/multi-resolution.md) before changing art or
 its fit policy.
 
-Every ship-track game derived from this template must implement both purchase
-monetization and ads. Infer the best products, value, ad formats, placements,
-timing, limits, and presentation from that game's audience, loop, economy,
-progression, session shape, and natural breaks. Do not copy the template's
-example offers or stop at SDK wrappers, placeholders, disabled UI, diagnostics,
-or recommendations. A prototype may defer both until ship-track promotion, and
-an explicit owner instruction may narrow or override the model.
+Every ship-track game derived from this template must implement both:
+
+1. at least one game-appropriate product priced in **RB (Run Bits)** through
+   RUN Shop + Entitlements; and
+2. at least one game-appropriate player-facing ad placement.
+
+The Run Bits item lives in `rundot/shop.config.json` with
+`price.type: "bucks"` (`bucks` is the schema name), while player-facing copy
+says “Run Bits” or “RB.” The game must fetch the catalog, display its resolved
+RB price, open `shop.purchase()` only after direct player action, and reconcile
+orders and entitlements. Direct-fiat products and subscriptions are optional
+additions and do not replace the Run Bits requirement unless the owner
+explicitly approves that substitution. Low-level `iap.spendCurrency` is a
+prototype/accepted-risk exception, not the production default.
+
+Infer the best product, value, RB price, ad format, placement, timing, limits,
+and presentation from that game's audience, loop, economy, progression,
+session shape, and natural breaks. Do not copy the template's example offers or
+stop at SDK wrappers, placeholders, disabled UI, diagnostics, or
+recommendations. A prototype may defer both channels until ship-track
+promotion, and an explicit owner instruction may narrow or override the model.
 
 Use the `NoiseRandom` class in `src/game/noiseRandom.ts` for ordinary random
 numbers in game logic and procedural generation; never add `Math.random()` to

@@ -94,6 +94,7 @@ const rendererLifecycle = read("src/rendering/rendererLifecycle.ts");
 const threeReference = read("src/rendering/three/createThreeReference.ts");
 const pixiOverlay = read("src/rendering/pixi/createPixiOverlay.ts");
 const multiResolution = read("docs/multi-resolution.md");
+const monetizationGuide = read("docs/monetization.md");
 const renderingArchitecture = read("docs/rendering-architecture.md");
 const thirdPartyNotices = read("THIRD_PARTY_NOTICES.md");
 const contributing = read("CONTRIBUTING.md");
@@ -168,6 +169,28 @@ expect(readme.startsWith("# rundot_template\n"), "README heading must match the 
 expect(
     readme.includes("git clone https://github.com/LorenzGit/rundot_template.git"),
     "README clone command must use the current repository URL",
+);
+expect(
+    readme.includes("Run Bits monetization") &&
+        /Direct-fiat products and subscriptions are\s+optional additions/.test(readme),
+    "README must state that Run Bits purchases and ads are the required ship-track channels",
+);
+expect(
+    localAgents.includes("product priced in **RB (Run Bits)**") &&
+        localAgents.includes('price.type: "bucks"') &&
+        localAgents.includes("do not replace the Run Bits requirement"),
+    "AGENTS.md must require a Run Bits Shop product rather than generic purchase monetization",
+);
+expect(
+    monetizationGuide.includes("## What counts as Run Bits monetization") &&
+        monetizationGuide.includes("rundot/shop.config.json") &&
+        monetizationGuide.includes('"price": { "type": "bucks", "value": "100" }') &&
+        monetizationGuide.includes("## Ship-track definition of done"),
+    "monetization guide must define the complete Run Bits vertical slice",
+);
+expect(
+    featureLabSdk.includes("RUN BITS") && !featureLabSdk.includes("RUNBUCKS"),
+    "player-facing monetization terminology must say Run Bits, not RunBucks",
 );
 expect(
     !/RUN Pixi WebGPU template/i.test(`${readme}\n${contributing}`),

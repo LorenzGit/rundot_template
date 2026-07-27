@@ -280,7 +280,7 @@ export async function inspectRunPlayerServices(): Promise<RunDemoResult> {
         probe(
             "balance",
             () => RundotGameAPI.iap.getHardCurrencyBalance(),
-            (balance) => `${RundotGameAPI.formatNumber(balance)} RUNBUCKS`,
+            (balance) => `${RundotGameAPI.formatNumber(balance)} RUN BITS`,
         ),
         probe(
             "subscriptions",

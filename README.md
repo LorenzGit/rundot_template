@@ -3,13 +3,22 @@
 A renderer-flexible RUN.world game foundation and knowledge base for PixiJS,
 Three.js, or a deliberate combination of both.
 
-For any ship-track game derived from this repository, **purchase monetization
-and ads are both required**. The implementing AI should inspect the game's
-audience, loop, economy, progression, session shape, and natural breaks, then
-choose and build the products, rewards, ad formats, placements, timing, limits,
-and presentation that fit that game. The template's examples are knowledge, not
-a catalog or ad plan to copy. Prototypes may defer both until promotion, and an
-explicit owner instruction may narrow or override the model.
+For any ship-track game derived from this repository, **Run Bits monetization
+and ads are both required**:
+
+1. at least one real, player-facing product priced in **RB (Run Bits)** through
+   RUN Shop + Entitlements; and
+2. at least one real, player-facing, game-appropriate ad placement.
+
+The implementing AI should inspect the game's audience, loop, economy,
+progression, session shape, and natural breaks, then choose and build the
+product, value, RB price, reward, ad format, placement, timing, limits, and
+presentation that fit that game. Direct-fiat products and subscriptions are
+optional additions; they do not replace the Run Bits product unless the owner
+explicitly approves that substitution. The template's examples are knowledge,
+not a catalog or ad plan to copy. Prototypes may defer both required channels
+until promotion, and an explicit owner instruction may narrow or override the
+model.
 
 ## RUN.world CLI and SDK
 
@@ -310,9 +319,9 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
   non-authoritative browser fallback.
 - Daily rewards and quests use trusted RUN time in the host, stable claim IDs,
   duplicate/in-flight guards, atomic persistence, and rollback on save failure.
-- LiveOps, custom/funnel analytics, notification consent/messaging, haptics, rewarded ads,
-  Shop purchases, lifecycle hooks, and identity changes pass through one typed
-  boundary in `src/sdk/runSdk.ts`.
+- LiveOps, custom/funnel analytics, notification consent/messaging, haptics,
+  rewarded ads, Run Bits Shop purchases, lifecycle hooks, and identity changes
+  pass through one typed boundary in `src/sdk/runSdk.ts`.
 - Monetization stays off until LiveOps, real IDs, host capability, direct player
   action, and authoritative outcomes all agree.
 - The visible RUN Feature Lab exposes rewarded/interstitial ad tests, the native
