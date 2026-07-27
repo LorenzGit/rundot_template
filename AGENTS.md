@@ -86,6 +86,33 @@ defined there before changing SDK or CLI integration.
 
 ## Project-local skills
 
+`.agents/skills/` holds the authoring skills that ship with this template;
+`.claude/skills` is a symlink to it, so Claude Code picks them up unchanged.
+
+**Check `rundot skills list` first.** The RUN CLI ships its own skills — the
+SDK reference, deploy, monetization, marketing, a new-game scaffold, and eleven
+`rundot-feature-*` systems (save, ads, stats, iap-shop, tutorial, daily
+rewards/quests, notifications, analytics, localization). Install those with
+`rundot skills install <name>`; they are versioned with the CLI and always take
+precedence. The skills below deliberately do **not** duplicate any of them.
+
+- Platform and ops: `rundot-cli-ops`, `rundot-liveops`, `rundot-multiplayer`,
+  `rundot-phaser`.
+- Product: `rundot-game-design`, `rundot-analytics-ops`,
+  `rundot-safety-support`, `rundot-reliability-qa` (bundles the release gate:
+  `scripts/audit-game-readiness.sh` and
+  `references/GAME_READINESS_CHECKLIST.md`).
+- Assets and quality: `rundot-game-quality`, `rundot-visual-assets`,
+  `rundot-audio`, `img2threejs`, plus three local asset tools that spend no RUN
+  credits — `codex-image-gen` (OpenAI Codex CLI image generation),
+  `bg-removal-softshadows` (cutouts that preserve soft contact shadows), and
+  `compress-mp3-audio` (FFmpeg presets for web delivery). The latter three need
+  local tooling (a Codex CLI, Python/FFmpeg) that this template does not
+  install; each SKILL.md states its own prerequisites.
+
+Skills must stay machine-independent. `npm run test` fails on any absolute
+home-directory path or private Codex reference inside them.
+
 - Use [`.agents/skills/rundot-multiplayer/SKILL.md`](.agents/skills/rundot-multiplayer/SKILL.md)
   for any shared room, world, match, turn order, economy, synchronized
   simulation, matchmaking, competitive result, or reconnectable session. Read

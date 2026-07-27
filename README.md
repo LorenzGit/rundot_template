@@ -279,7 +279,7 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
 
 | Path | Purpose |
 | --- | --- |
-| `.agents/skills/` | Project-local authoring skills copied with the template |
+| `.agents/skills/` | 15 authoring skills copied with the template; `.claude/skills` symlinks here. Run `rundot skills list` first — the CLI ships its own, and these do not duplicate them |
 | `e2e/` | Responsive, scrolling, orientation, diagnostics, and runtime-error browser smoke tests |
 | `src/assets/art/` | Original portrait/landscape PNG reference art; replace it in every derived game |
 | `src/game/` | Pixi application, orientation-adaptive stage, demo scene, particles, and tweens |
