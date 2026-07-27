@@ -8,7 +8,8 @@ description: "Design RUN.world games from the core loop through FTUE, difficulty
 Design the player experience before implementing systems. Read the starter
 README, `rundot-player-systems`, `rundot-monetization`, and
 `rundot-game-quality` for every new game; bring in `rundot-analytics-ops` before
-locking measurements.
+locking measurements. For onboarding, return hooks, appointment mechanics, or
+notification strategy, read `references/retention-design.md` completely.
 
 ## Design contract
 
@@ -16,11 +17,13 @@ Complete `references/game-design-brief-template.md` before choosing a renderer,
 save schema, economy, content format, or monetization surface.
 
 1. Define the player fantasy, target session length, one-sentence core loop,
-   first meaningful action, short-term goal, failure/retry loop, and return
-   reason. Make the game understandable without tutorial text where possible.
+   first meaningful action, short-/medium-/long-term goal ladder, failure/retry
+   loop, and exact next-session promise. Make the game understandable without
+   tutorial text where possible.
 2. Map the first ten minutes: welcome, control discovery, first success, first
    decision, first challenge/failure, recovery, reward, progression reveal, and
-   next-session hook. Teach through play; do not bury the game under modal copy.
+   next-session hook. Deliver a meaningful early win, teach through play, and do
+   not bury the game under modal copy.
 3. Specify the difficulty curve, accessibility/comfort choices, skill versus RNG
    balance, pacing, content cadence, and fail states. Ensure retry is quick,
    clear, and emotionally fair.
@@ -36,9 +39,10 @@ save schema, economy, content format, or monetization surface.
 
 Instrument the design contract: FTUE completion, time to first value, first
 failure/retry, session completion, progression stalls, return behavior, and
-player-trust guardrails. Use `rundot-analytics-ops` to validate data before
-making balance claims. Preserve deterministic/reproducible test scenarios for
-critical curves and rewards.
+player-trust guardrails. Measure reasons and reminders separately so a weak
+return goal is not mistaken for a notification-delivery problem. Use
+`rundot-analytics-ops` to validate data before making balance claims. Preserve
+deterministic/reproducible test scenarios for critical curves and rewards.
 
 ## Verify and hand off
 
