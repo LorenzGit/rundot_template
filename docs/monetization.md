@@ -71,34 +71,13 @@ until all of these are true:
    acquisition flow. The game never silently substitutes a direct charge or an
    ad.
 
-## The RB rate, observed rather than inferred
+## The RB rate
 
-Observed on the live Run Bits purchase screen, **2026-07-27**: the base rate is
-**100 RB per USD**, i.e. 1 RB ≈ 1 US cent, holding across every non-bonus tier.
-
-| Bundle | Price | RB per $ | Bonus |
-| ---: | ---: | ---: | ---: |
-| 200 RB | $1.99 | 100.5 | — |
-| 500 RB | $4.99 | 100.2 | — |
-| 1,000 RB | $9.99 | 100.1 | — |
-| 2,000 RB | $19.99 | 100.1 | — |
-| 6,000 RB | $49.99 | 120.0 | +20% |
-| 13,000 RB | $99.99 | 130.0 | +30% |
-
-Re-verify before pricing; this is a dated observation, not a guarantee. It is
-recorded because inferring the rate rather than checking it is expensive in both
-directions.
-
-**A worked example of getting it wrong.** A game priced at 99/199/299/399/499 RB
-was flagged as roughly tenfold underpriced, reasoning that sibling titles sold
-packs at 400–4,000 RB. The conclusion was wrong: those siblings are *expensive
-products* — a 4,000 RB pack is a $40 purchase — not a different unit. The
-original ladder was already correct at $0.99–$4.99, and the correction would
-have repriced a live catalog for no reason.
-
-A price band is not a unit: a wide spread across comparables means the games
-differ, not the currency. And "never hardcode a conversion" cuts both ways —
-deriving one from comparables is the same error as assuming one.
+`~100 RB ≈ $1 USD`. The dated observation, the full tier table, and a worked
+example of getting this wrong live in
+`.agents/skills/rundot-monetization/references/pricing-templates.md`. Read it
+before setting prices, and re-verify against the live catalog — do not derive
+the rate from what other games charge.
 
 ## Consumables are never "owned"
 
