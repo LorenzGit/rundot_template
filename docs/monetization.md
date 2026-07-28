@@ -67,6 +67,10 @@ until all of these are true:
 4. Order history and authoritative Entitlements reconcile success,
    cancellation, ambiguous outcomes, retry, resume, cross-device ownership,
    refunds, and revocations.
+   An ambiguous outcome must never become a permanent checkout lock:
+   background/resume reconciliation is read-only, while a later direct tap for
+   the same item retries the original logical order with the same idempotency
+   key.
 5. When the player lacks RB, the RUN host may open its native Run Bits
    acquisition flow. The game never silently substitutes a direct charge or an
    ad.
@@ -128,4 +132,4 @@ Initial funnel events should cover eligible view, explicit click, SDK open, veri
 
 ## Required host QA
 
-Exercise unavailable ads, cancellation, SDK false completion, timeout, duplicate taps, backgrounding, purchase cancellation, ambiguous purchase recovery, order history reconciliation, missing entitlement, refund, catalog mismatch, LiveOps kill switch, and offline resume in RUN Playground. Purchases can be real and persistent; use only an approved identity and explicit budget.
+Exercise unavailable ads, cancellation, SDK false completion, timeout, duplicate taps, backgrounding, purchase cancellation, ambiguous purchase recovery, read-only background reconciliation, explicit same-key retry after an unresolved intent, order history reconciliation, missing entitlement, refund, catalog mismatch, LiveOps kill switch, and offline resume in RUN Playground. Purchases can be real and persistent; use only an approved identity and explicit budget.

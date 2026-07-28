@@ -15,7 +15,10 @@ test setup before changing behavior.
    texture/audio/video size, frame responsiveness, and network requests.
 2. Classify every platform call: optional/read-only calls get bounded retries or
    an honest fallback; grants, purchases, scores, and destructive work must not
-   be retried into duplicate outcomes.
+   be retried into duplicate outcomes. A persisted ambiguous Shop purchase is
+   the exception that requires a safe retry contract: background reconciliation
+   stays read-only, and a new direct tap retries the same logical order with its
+   original idempotency key.
 3. Handle structured errors and rate limits; respect retry delays, back off, and
    surface recovery instead of spinning/retrying per frame.
 4. Load optional/large CDN assets progressively, cancel/clean up discarded blob
@@ -43,8 +46,9 @@ the defects that are invisible in local dev, headless Chrome, and ViewDeck
 because the local environment supplies a benign default where the host supplies
 something hostile or absent — safe-area insets, keyboard focus after an ad,
 host-gated UI that hides itself from your own layout tests, and consumables that
-report as owned. Every item in it reached a real handset through a gate that
-already ran invariants, a headless simulation, and a screenshot pass.
+report as owned, plus persisted purchase intents that can permanently lock
+checkout. Every item in it reached a real handset through a gate that already
+ran invariants, a headless simulation, and a screenshot pass.
 
 For a complete cross-functional handoff, run
 `bash scripts/audit-game-readiness.sh <project-dir>` from this skill's

@@ -7,6 +7,7 @@ project_dir=$(cd "$project_dir" 2>/dev/null && pwd) || {
   echo "FAIL project directory is not accessible: ${1:-.}" >&2
   exit 2
 }
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 pass=0
 warn=0
@@ -59,6 +60,19 @@ if [[ -d "$project_dir/dist" ]]; then
   printf 'PASS build output directory exists\n'; ((pass+=1))
 else
   printf 'WARN build output directory does not exist (run the project build before deploy)\n'; ((warn+=1))
+fi
+
+purchase_check="$script_dir/check-purchase-recovery.mjs"
+if [[ -f "$purchase_check" ]] && command -v node >/dev/null 2>&1; then
+  if purchase_output=$(node "$purchase_check" "$project_dir" 2>&1); then
+    printf '%s\n' "$purchase_output"
+    if [[ "$purchase_output" == *"PASS "* ]]; then ((pass+=1)); fi
+  else
+    printf '%s\n' "$purchase_output"
+    ((fail+=1))
+  fi
+else
+  printf 'WARN purchase recovery checker unavailable\n'; ((warn+=1))
 fi
 
 printf '\nSummary: %d pass, %d warning, %d failure.\n' "$pass" "$warn" "$fail"

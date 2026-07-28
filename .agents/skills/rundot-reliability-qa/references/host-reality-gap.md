@@ -93,6 +93,30 @@ unbuyable**, silently, only once a host is present.
 Require a non-empty entitlement list *and* a non-consumable kind. Ownership is
 only meaningful for something you can own once.
 
+## 5. A persisted pending purchase becomes a permanent checkout lock
+
+An ambiguous host result must preserve its purchase intent because the order may
+still have completed. The broken pattern sees that saved intent on every later
+tap, checks order history, finds nothing, and returns `unknown` forever. The
+player can still press the button, but checkout never opens again.
+
+This is easy to miss locally because a mock checkout normally returns a clean
+success or cancellation. Production bridge timeouts and interrupted host flows
+create the ambiguous state.
+
+Use two deliberately different paths:
+
+- Background/resume reconciliation only reads order history and authoritative
+  Entitlements. It never opens checkout.
+- A fresh direct player tap for the same item first reconciles, then retries the
+  original `catalogItemId` with the original idempotency key if no order exists.
+  It does not create a second logical intent.
+
+Definitive cancellation or failure clears the intent. Unknown outcomes retain
+it. Test the complete sequence: checkout timeout, persisted intent, reload,
+empty order history, background reconciliation with zero purchase calls, then a
+new tap that makes exactly one purchase call with the original key.
+
 ## What to add to a browser QA pass
 
 One pass at a phone size with host insets applied catches most of the above:
@@ -107,6 +131,9 @@ One pass at a phone size with host insets applied catches most of the above:
   inside its sheet and not collapsed.
 - Assert fixed-content modals fit outright rather than hiding content behind a
   sticky rail.
+- In RUN Playground, interrupt a Shop purchase into an ambiguous outcome,
+  reload, verify resume does not reopen checkout, then tap the same product and
+  verify the original logical order is safely retried rather than left locked.
 
 Useful viewport: a landscape handset gives the game a *narrow middle column*
 because host chrome occupies both edges. `718x440` CSS is a realistic worst case
