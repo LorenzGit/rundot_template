@@ -1,9 +1,9 @@
 # The host reality gap
 
-A class of defect that is invisible in `npm run dev`, in headless Chrome, and in
-ViewDeck, and appears only once the game is embedded in the RUN host on a real
-handset. Each item below shipped to a device before being caught, in a project
-whose gate already ran invariants, a headless simulation, and a screenshot pass.
+A class of defect that is invisible with benign local defaults and appears once
+the game receives real host inputs. Current ViewDeck can expose several of
+these defects when its device values are actually consumed and its audit report
+is checked; a plain screenshot pass at zero insets still proves nothing.
 
 What they share: **the local environment supplies a benign default where the
 host supplies something hostile or absent.** Testing against the benign default
@@ -46,6 +46,19 @@ against the wrong one turns a small real inset into a screen-eating one.
 Recompute on `resize`, `orientationchange`, and `visualViewport`
 resize/scroll — a host toolbar sliding away changes the visible box without
 firing a window resize.
+
+For ViewDeck, prefer its oriented CSS properties before native browser
+environment values:
+
+```css
+--safe-left: var(--viewdeck-safe-area-inset-left, env(safe-area-inset-left, 0px));
+```
+
+Do this on all four edges. Bare `env()` values in desktop WKWebView may preserve
+the portrait bottom inset in landscape and omit the new side insets. That
+creates both a phantom bottom gap and notch-overlapping controls. The safe-area
+guide is visual only, so never use **Force page inside safe area** to make a
+broken layout appear correct.
 
 ## 2. An ad takes keyboard focus and does not give it back
 
@@ -121,6 +134,10 @@ new tap that makes exactly one purchase call with the original key.
 
 One pass at a phone size with host insets applied catches most of the above:
 
+- In ViewDeck, use an app profile in landscape, show the guide without forcing
+  page insets, and fail on `interactive-safe-area-overlap`. Confirm the report
+  has asymmetric side insets and zero bottom inset where the device specifies
+  it.
 - Drive the **real** inset conversion with a hostile reading (e.g. host values
   in device pixels against a CSS-pixel frame), not hand-set CSS variables, so
   the clamp is what is under test.

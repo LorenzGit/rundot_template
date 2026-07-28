@@ -148,6 +148,66 @@ test("orientation changes refresh safe areas without losing game state", async (
     expect((await readQaSnapshot(page)).phase).toBe("playing");
 });
 
+test("landscape consumes ViewDeck side insets without a phantom bottom inset", async ({ page }) => {
+    await page.setViewportSize({ width: 960, height: 444 });
+    const safeArea = { top: 0, right: 34, bottom: 0, left: 62 };
+    await page.addInitScript((insets) => {
+        const apply = () => {
+            const root = document.documentElement;
+            if (!root) return;
+            root.dataset.viewdeckSafeArea = JSON.stringify(insets);
+            for (const edge of ["top", "right", "bottom", "left"] as const) {
+                root.style.setProperty(`--viewdeck-safe-area-inset-${edge}`, `${insets[edge]}px`);
+            }
+        };
+        if (document.documentElement) apply();
+        else document.addEventListener("DOMContentLoaded", apply, { once: true });
+    }, safeArea);
+    await openReady(page, "qa=1&screen=daily-rewards");
+    await expect(page.getByRole("heading", { name: "DAILY REWARDS" })).toBeVisible();
+
+    const layout = await page.evaluate(() => {
+        const rootStyle = getComputedStyle(document.documentElement);
+        const screen = document.querySelector<HTMLElement>(".subscreen");
+        const back = document.querySelector<HTMLElement>(".back-button");
+        const scrollRegion = document.querySelector<HTMLElement>("[data-testid='screen-scroll-region']");
+        if (!screen || !back || !scrollRegion) throw new Error("Daily rewards layout is unavailable");
+        const screenStyle = getComputedStyle(screen);
+        return {
+            safeArea: {
+                top: rootStyle.getPropertyValue("--safe-top").trim(),
+                right: rootStyle.getPropertyValue("--safe-right").trim(),
+                bottom: rootStyle.getPropertyValue("--safe-bottom").trim(),
+                left: rootStyle.getPropertyValue("--safe-left").trim(),
+            },
+            screenPadding: {
+                right: Number.parseFloat(screenStyle.paddingRight),
+                bottom: Number.parseFloat(screenStyle.paddingBottom),
+                left: Number.parseFloat(screenStyle.paddingLeft),
+            },
+            backLeft: back.getBoundingClientRect().left,
+            scrollable: scrollRegion.scrollHeight > scrollRegion.clientHeight,
+        };
+    });
+
+    expect(layout.safeArea).toEqual({ top: "0px", right: "34px", bottom: "0px", left: "62px" });
+    expect(layout.screenPadding.left).toBeGreaterThanOrEqual(safeArea.left);
+    expect(layout.screenPadding.right).toBeGreaterThanOrEqual(safeArea.right);
+    expect(layout.screenPadding.bottom).toBe(8);
+    expect(layout.backLeft).toBeGreaterThanOrEqual(safeArea.left);
+    expect(layout.scrollable).toBe(true);
+
+    const scrollRegion = page.getByTestId("screen-scroll-region");
+    await scrollRegion.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect(page.getByTestId("screen-end")).toBeInViewport();
+    const claimRect = await page.locator(".claim-action").evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        return { left: rect.left, right: rect.right };
+    });
+    expect(claimRect.left).toBeGreaterThanOrEqual(safeArea.left);
+    expect(claimRect.right).toBeLessThanOrEqual(960 - safeArea.right);
+});
+
 test("renderer lifecycle serializes StrictMode, route changes, and hybrid mode", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openReady(page, "qa=1&screen=game&renderer=webgl");

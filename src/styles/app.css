@@ -54,12 +54,14 @@ input:focus-visible {
        and crop-critical subjects out of the image's unsafe edge region. */
     --scene-backdrop: url("../assets/art/pixel-foundry-backdrop-portrait.png");
     --page-backdrop: linear-gradient(rgba(32, 19, 83, 0.16), rgba(28, 15, 75, 0.42)), var(--scene-backdrop);
-    /* Browser insets are the local fallback. When attached, RUN replaces all
-       four values with host-authoritative insets before React mounts. */
-    --safe-top: env(safe-area-inset-top, 0px);
-    --safe-right: env(safe-area-inset-right, 0px);
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
-    --safe-left: env(safe-area-inset-left, 0px);
+    /* ViewDeck exposes oriented device insets as custom properties because
+       desktop WKWebView cannot reliably emulate CSS env() values. RUN replaces
+       these variables inline with host-authoritative values when attached;
+       ordinary browsers fall through to their native safe-area environment. */
+    --safe-top: var(--viewdeck-safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --safe-right: var(--viewdeck-safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --safe-bottom: var(--viewdeck-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --safe-left: var(--viewdeck-safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 
 @media (orientation: landscape) {

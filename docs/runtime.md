@@ -14,15 +14,17 @@
   `requestPopOrQuit()` when the template navigation stack is empty.
 - Identity changes trigger a clean reload when the profile ID changes. The game never flushes one player's in-memory state under another identity.
 - RUN safe-area values are applied to CSS custom properties after the bounded host handshake.
-- The app calls `applyRunSafeArea()` again on `orientationchange`. ViewDeck
-  updates its mocked `system.getSafeArea()` value before dispatching that event,
-  so the CSS insets update without reloading or replacing game state. The
+- The app calls `applyRunSafeArea()` again on `orientationchange`. ViewDeck's
+  oriented device data takes priority over the SDK's stale local mock and
+  remains a live CSS reference, while an attached RUN host is re-read outside
+  ViewDeck. Insets update without reloading or replacing game state, and the
   listener is removed when the React root unmounts.
 - SDK 5.24 production documentation describes safe-area values as static after
   initialization. Re-reading on the discrete orientation event is harmless,
   supports ViewDeck's rotation contract, and avoids resize polling.
-- Outside the RUN host, the stylesheet retains its browser
-  `env(safe-area-inset-*)` fallbacks instead of overwriting them with zero.
+- Outside the RUN host, the stylesheet prefers ViewDeck's oriented custom
+  properties and then browser `env(safe-area-inset-*)`, rather than overwriting
+  either fallback with zero.
 
 ## Renderer and persistence
 

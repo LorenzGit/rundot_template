@@ -752,6 +752,12 @@ expect(
     "orientation changes must re-read safe areas with StrictMode-safe listener cleanup",
 );
 expect(
+    runSdk.includes("dataset.viewdeckSafeArea") &&
+        runSdk.includes("if (viewDeckArea)") &&
+        runSdk.includes("root.style.removeProperty(`--safe-${edge}`)"),
+    "ViewDeck's oriented device values must override the SDK's stale local safe-area mock",
+);
+expect(
     main.includes("if (import.meta.env.DEV)") &&
         main.includes('await import("./dev/preview.ts")') &&
         developmentPreview.includes('new URLSearchParams(window.location.search).get("screen")'),
@@ -799,8 +805,10 @@ expect(
 );
 for (const edge of ["top", "right", "bottom", "left"]) {
     expect(
-        appStyles.includes(`--safe-${edge}: env(safe-area-inset-${edge}, 0px)`),
-        `browser safe-area fallback is missing: ${edge}`,
+        appStyles.includes(
+            `--safe-${edge}: var(--viewdeck-safe-area-inset-${edge}, env(safe-area-inset-${edge}, 0px))`,
+        ),
+        `ViewDeck/browser safe-area fallback chain is missing: ${edge}`,
     );
 }
 

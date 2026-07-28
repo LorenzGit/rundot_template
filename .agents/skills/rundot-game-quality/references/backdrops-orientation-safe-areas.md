@@ -35,6 +35,26 @@ Treat these as three separate layout layers:
    surfaces positioned inside RUN/device safe-area insets within the playable
    frame. Decorative backdrop art must never carry required UI.
 
+When ViewDeck is present, its selected device's oriented values must override
+the SDK's local mock. Otherwise use the attached real RUN host value, then the
+browser's native `env(safe-area-inset-*)`. ViewDeck runs in desktop WKWebView,
+where the mock's browser-derived values can retain a portrait bottom inset
+after rotating to landscape while exposing no left/right inset. The visible
+signature is a false empty strip at the bottom plus controls under the notch.
+
+```css
+:root {
+    --safe-top: var(--viewdeck-safe-area-inset-top, env(safe-area-inset-top, 0px));
+    --safe-right: var(--viewdeck-safe-area-inset-right, env(safe-area-inset-right, 0px));
+    --safe-bottom: var(--viewdeck-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+    --safe-left: var(--viewdeck-safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+```
+
+The ViewDeck guide only visualizes the contract; it deliberately does not move
+page content. Do not enable forced page insets as a substitute for correct game
+layout.
+
 ## Required desktop behavior
 
 - A portrait game on desktop/landscape shows a deliberate full-bleed backdrop
@@ -58,15 +78,18 @@ non-uniform scaling quickly.
 
 ## Safe-area insets on a real handset
 
-Local dev, headless Chrome, and ViewDeck all report zero insets, so a layout
-that anchors to them is never exercised until it reaches a player. Treat the
-host's values as untrusted input and clamp them per edge *and* per axis before
-any HUD or modal uses them.
+Local dev and headless Chrome report zero insets unless the test injects them.
+ViewDeck exposes the selected device's oriented insets, but the game must
+consume its custom properties itself. Treat host values as untrusted input and
+clamp them per edge *and* per axis before any HUD or modal uses them.
 
 Landscape handsets are also far shorter than most test viewports, and host
 chrome takes both edges, leaving the game a narrow middle column — roughly
 `718x440` CSS. Design and test sheets against that, not against a 900px-wide
 tablet.
+
+In ViewDeck, use an app profile in landscape, show the safe-area guide, leave
+forced page insets off, and treat `interactive-safe-area-overlap` as a failure.
 
 Two layout rules that follow from it:
 

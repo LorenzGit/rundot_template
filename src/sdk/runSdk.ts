@@ -88,31 +88,58 @@ export interface RunSafeArea {
 
 const ZERO_SAFE_AREA: Readonly<RunSafeArea> = Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 });
 
+function normalizeSafeArea(area: Partial<RunSafeArea>): RunSafeArea {
+    return {
+        top: Math.max(0, Number(area.top) || 0),
+        right: Math.max(0, Number(area.right) || 0),
+        bottom: Math.max(0, Number(area.bottom) || 0),
+        left: Math.max(0, Number(area.left) || 0),
+    };
+}
+
+function readViewDeckSafeArea(): RunSafeArea | null {
+    const serialized = document.documentElement.dataset.viewdeckSafeArea;
+    if (!serialized) return null;
+    try {
+        return normalizeSafeArea(JSON.parse(serialized) as Partial<RunSafeArea>);
+    } catch {
+        return null;
+    }
+}
+
 export function getRunSafeArea(): Readonly<RunSafeArea> {
+    // ViewDeck's device profile is authoritative while it is simulating a
+    // handset. Its oriented values must win over the SDK's local mock, whose
+    // browser-derived env() values can remain in portrait after rotation.
+    const viewDeckArea = readViewDeckSafeArea();
+    if (viewDeckArea) return viewDeckArea;
     if (!_ready) return ZERO_SAFE_AREA;
     try {
-        const area = RundotGameAPI.system.getSafeArea();
-        return {
-            top: Math.max(0, Number(area.top) || 0),
-            right: Math.max(0, Number(area.right) || 0),
-            bottom: Math.max(0, Number(area.bottom) || 0),
-            left: Math.max(0, Number(area.left) || 0),
-        };
+        return normalizeSafeArea(RundotGameAPI.system.getSafeArea());
     } catch {
         return ZERO_SAFE_AREA;
     }
 }
 
-/** Publish host insets as CSS variables without coupling UI code to the SDK. */
+/** Publish the resolved device insets without coupling UI code to the source. */
 export function applyRunSafeArea(): Readonly<RunSafeArea> {
-    const area = getRunSafeArea();
+    const viewDeckArea = readViewDeckSafeArea();
     const root = document.documentElement;
     if (import.meta.env.DEV) {
         const count = Number(root.dataset.safeAreaRefreshCount ?? 0);
         root.dataset.safeAreaRefreshCount = String(count + 1);
     }
-    // Outside RUN, leave the stylesheet's env(safe-area-inset-*) fallbacks
-    // intact. Publishing zero-valued host data would erase real browser insets.
+    if (viewDeckArea) {
+        // Keep ViewDeck's custom properties live instead of copying a snapshot.
+        // Its rotation updates then flow through CSS without a reload or race.
+        for (const edge of ["top", "right", "bottom", "left"]) {
+            root.style.removeProperty(`--safe-${edge}`);
+        }
+        return viewDeckArea;
+    }
+    const area = getRunSafeArea();
+    // Outside RUN, leave the stylesheet's ViewDeck/browser fallback chain
+    // intact. Publishing zero-valued host data would erase real device insets.
     if (!_ready) return area;
     root.style.setProperty("--safe-top", `${area.top}px`);
     root.style.setProperty("--safe-right", `${area.right}px`);

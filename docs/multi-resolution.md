@@ -74,19 +74,39 @@ hazards into left and right hazards.
 
 This template uses the following source priority:
 
-1. When attached to RUN, `RundotGameAPI.system.getSafeArea()` supplies the host
-   insets.
-2. Outside the host, CSS `env(safe-area-inset-*)` remains the browser fallback.
-3. Ordinary design padding is added inside those insets.
+1. In ViewDeck, its selected device's oriented insets are authoritative,
+   including over the SDK's local mock.
+2. Otherwise, when attached to RUN,
+   `RundotGameAPI.system.getSafeArea()` supplies the real host insets.
+3. Outside either environment, CSS `env(safe-area-inset-*)` remains the browser
+   fallback.
+4. Ordinary design padding is added inside those insets.
 
 `src/sdk/runSdk.ts` publishes attached-host values as `--safe-top`,
 `--safe-right`, `--safe-bottom`, and `--safe-left`. `src/styles/app.css`
 consumes those variables in the menu, subscreens, HUD, and toasts.
 
 `src/ui/App.tsx` re-runs `applyRunSafeArea()` on `orientationchange`. ViewDeck
-updates its mocked `getSafeArea()` value before dispatching that event, so the
-new insets are applied synchronously without reloading the app or resetting
-React/Pixi state. The effect removes its listener on unmount.
+updates its dataset and `--viewdeck-safe-area-inset-*` properties before
+dispatching that event. The stylesheet keeps a live reference to those
+properties, so rotation flows through synchronously without copying a stale
+snapshot, reloading the app, or resetting React/Pixi state. Outside ViewDeck,
+the event re-reads attached RUN host values. The effect removes its listener on
+unmount.
+
+Do not use bare `env(safe-area-inset-*)` as the template fallback. Desktop
+WKWebView cannot reliably rotate those values during device simulation. In
+landscape that failure commonly leaves the portrait home-indicator inset at
+the bottom while reporting zero on the sides: the result is a false bottom gap
+and controls under the notch. Keep this exact chain for every edge:
+
+```css
+--safe-left: var(--viewdeck-safe-area-inset-left, env(safe-area-inset-left, 0px));
+```
+
+ViewDeck's safe-area guide is visual only; it does not move the game. A passing
+layout must consume the exposed variables itself. Do not use **Force page
+inside safe area** to hide missing game-side inset handling.
 
 Do not blindly add both host padding and browser padding. Some hosts already
 reserve space for native chrome, particularly above the game. Confirm the
@@ -176,6 +196,8 @@ screen is not multi-resolution evidence.
 - Scaling the entire DOM until it fits.
 - Treating renderer resolution or DPR as layout scale.
 - Applying only the bottom safe area.
+- Reading bare browser `env()` values in ViewDeck instead of preferring its
+  oriented `--viewdeck-safe-area-inset-*` variables.
 - Reading viewport or safe-area values once and never responding to resize.
 - Stretching a portrait backdrop across a wide screen.
 - Hiding clipped content while also disabling the only useful scroll region.
