@@ -55,3 +55,28 @@ no visible empty/skinny frame, safe controls, dialogs, keyboard/focus behavior,
 and no crop-dependent instructions or text. Compare recognizable circles,
 faces, logos, and repeated objects against the source asset; these reveal subtle
 non-uniform scaling quickly.
+
+## Safe-area insets on a real handset
+
+Local dev, headless Chrome, and ViewDeck all report zero insets, so a layout
+that anchors to them is never exercised until it reaches a player. Treat the
+host's values as untrusted input and clamp them per edge *and* per axis before
+any HUD or modal uses them.
+
+Landscape handsets are also far shorter than most test viewports, and host
+chrome takes both edges, leaving the game a narrow middle column — roughly
+`718x440` CSS. Design and test sheets against that, not against a 900px-wide
+tablet.
+
+Two layout rules that follow from it:
+
+- **Actions belong in a sticky rail at the foot of a sheet**, not trailing the
+  end of its content. A sticky BACK is not enough: any primary action left in
+  normal flow falls below the fold the moment the sheet runs short, and the
+  player is asked to scroll a modal to find the only button that matters.
+- **A fixed-content modal should fit rather than scroll.** On a short screen,
+  put labels beside values instead of above them, prefer more columns over more
+  rows on a wide-and-short sheet, and drop purely informational lines.
+
+See `rundot-reliability-qa/references/host-reality-gap.md` for the failure
+signatures and the QA pass that catches them.

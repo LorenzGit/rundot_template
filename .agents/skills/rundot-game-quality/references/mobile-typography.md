@@ -52,3 +52,19 @@ Do not count DPR as an increase.
    any role below its minimum.
 5. Record the smallest measured effective size and its selector/component,
    viewport, and scaling calculation in release evidence.
+
+## Keep short-viewport overrides last in the stylesheet
+
+A `@media (max-height: ...)` block whose selectors match the base rules they
+override has *the same specificity*, so source order alone decides. Placed
+before the base rules, the whole block is silently dead — no warning, no lint
+error, and the rules read as if they work.
+
+In one project seven of fifteen short-screen rules had never applied, including
+a compaction pass written and reported as working the day before. Put override
+blocks at the end of the file and say why in a comment, or raise their
+specificity deliberately.
+
+Related trap: an element that bleeds to a container's edge with negative margins
+must derive them from the same custom property the container uses for padding.
+Hard-coded pairs drift the moment a media query changes one of them.

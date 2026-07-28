@@ -38,6 +38,14 @@ For reproducible release evidence, read
 `references/browser-visual-qa.md` and add a test-only semantic browser-QA
 contract rather than relying on manual screenshots alone.
 
+Before shipping to a device, read `references/host-reality-gap.md`. It covers
+the defects that are invisible in local dev, headless Chrome, and ViewDeck
+because the local environment supplies a benign default where the host supplies
+something hostile or absent — safe-area insets, keyboard focus after an ad,
+host-gated UI that hides itself from your own layout tests, and consumables that
+report as owned. Every item in it reached a real handset through a gate that
+already ran invariants, a headless simulation, and a screenshot pass.
+
 For a complete cross-functional handoff, run
 `bash scripts/audit-game-readiness.sh <project-dir>` from this skill's
 directory and complete `references/GAME_READINESS_CHECKLIST.md`. The script is
