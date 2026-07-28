@@ -289,7 +289,7 @@ denying unnecessary Firebase, protobuf, and native fsevents install behavior.
 | `src/systems/` | Persistence, trusted time, localization, and daily systems |
 | `src/ui/` | React-owned menus, HUD, settings, and platform demonstrations |
 | `additional_features/` | Typechecked opt-in patterns excluded from the default client bundle |
-| `docs/` | Platform, multi-resolution, runtime, monetization, CLI, and audio contracts |
+| `docs/` | Platform, analytics, multi-resolution, runtime, monetization, CLI, and audio contracts |
 | `scripts/` | Template invariants and production-build verification |
 
 ## What is active
@@ -386,6 +386,8 @@ replacing the neutral headless model with a derived game's real rules.
   deliberately needs that workflow.
 - [`docs/run-capabilities.md`](docs/run-capabilities.md) maps every SDK surface,
   what prior games taught the template, required authority, and its source.
+- [`docs/analytics.md`](docs/analytics.md) defines the pause-aware level event
+  contract, measurement plan, and reporting boundary.
 - [`docs/rendering-architecture.md`](docs/rendering-architecture.md) explains
   when to use Pixi, Three.js, or both without duplicating the application
   foundation or treating the reference demo as a copyable game.

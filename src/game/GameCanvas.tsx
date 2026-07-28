@@ -12,6 +12,7 @@ import { createPixiApp } from "./pixiApp.ts";
 import { createStage, type Stage } from "./stage.ts";
 import { createDemoScene, type Scene } from "./demoScene.ts";
 import { store, useStore } from "../state/store.ts";
+import { abandonDemoLevel, demoLevelAnalytics } from "../systems/demoAnalytics.ts";
 import {
     acquireRendererRuntime,
     type RendererLease,
@@ -60,6 +61,7 @@ export default function GameCanvas() {
                     return;
                 }
                 console.error("[renderer] Pixi initialization failed", error);
+                abandonDemoLevel("renderer_error");
                 store.patch({
                     phase: "menu",
                     menuScreen: "main",
@@ -88,10 +90,12 @@ export default function GameCanvas() {
     useEffect(() => {
         const syncVisibility = () => {
             const app = appRef.current;
+            demoLevelAnalytics.setPaused("document_hidden", document.hidden);
             if (!app) return;
             if (document.hidden || store.get().paused) app.ticker.stop();
             else app.ticker.start();
         };
+        syncVisibility();
         document.addEventListener("visibilitychange", syncVisibility);
         return () => document.removeEventListener("visibilitychange", syncVisibility);
     }, []);

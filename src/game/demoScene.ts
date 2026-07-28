@@ -12,6 +12,7 @@ import { createTweenController, ease } from "./tween.ts";
 import { createParticleEmitter } from "./particles.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
+import { completeDemoLevel } from "../systems/demoAnalytics.ts";
 import { store } from "../state/store.ts";
 import type { Stage } from "./stage.ts";
 
@@ -197,6 +198,7 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
             }
             if (nextScore === 10) {
                 void runtimeServices.haptic("success");
+                completeDemoLevel(nextScore);
                 runtimeServices.track("demo_ten_bounces", { quality: settings.quality });
             }
         }

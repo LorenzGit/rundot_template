@@ -3,6 +3,7 @@ import { audioManager } from "../audio/audioManager.ts";
 import { saveSystem } from "../systems/save.ts";
 import { t } from "../systems/localization.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
+import { startDemoLevel } from "../systems/demoAnalytics.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore, type MenuScreen } from "../state/store.ts";
 
@@ -87,6 +88,7 @@ export default function MainMenu() {
             audioManager.play("start");
             runtimeServices.funnel(2, "demo_started", "template_first_play", 1);
             store.patch({ phase: "playing", score: 0, totalPlays: store.get().totalPlays + 1 });
+            startDemoLevel();
             dailySystems.recordQuestProgress("plays");
             void saveSystem.flush();
         });

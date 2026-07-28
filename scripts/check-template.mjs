@@ -108,6 +108,7 @@ const developmentTools = read("src/dev/DevelopmentTools.tsx");
 const verificationGuide = read("docs/verification.md");
 const deterministicSimulationGuide = read("docs/deterministic-simulation.md");
 const randomnessGuide = read("docs/randomness.md");
+const analyticsGuide = read("docs/analytics.md");
 const visualAssetsGuide = read("docs/visual-assets.md");
 const simulation = read("scripts/simulate-demo.mjs");
 const noiseRandom = read("src/game/noiseRandom.ts");
@@ -117,6 +118,8 @@ const publicAudit = read("scripts/audit-public.mjs");
 const e2eSmoke = read("e2e/template.smoke.spec.ts");
 const buildCheck = read("scripts/check-build.mjs");
 const runtimeServices = read("src/systems/runtimeServices.ts");
+const levelAnalytics = read("src/systems/levelAnalytics.ts");
+const demoAnalytics = read("src/systems/demoAnalytics.ts");
 
 expect(/^\d+\.\d+\.\d+$/.test(packageJson.version), "package version must be semver");
 expect(packageJson.name === "rundot_template", "package name must match the repository identity");
@@ -182,6 +185,26 @@ expect(
     "AGENTS.md must require a Run Bits Shop product rather than generic purchase monetization",
 );
 expect(
+    localAgents.includes("src/systems/levelAnalytics.ts") &&
+        localAgents.includes("active duration") &&
+        localAgents.includes("docs/analytics.md"),
+    "AGENTS.md must preserve the pause-aware level instrumentation contract",
+);
+expect(
+    analyticsGuide.includes("## Measurement plan") &&
+        analyticsGuide.includes("duration_seconds") &&
+        analyticsGuide.includes("level_completed") &&
+        analyticsGuide.includes("Paid-acquisition analysis"),
+    "analytics guide must define measurement, level timing, and attribution boundaries",
+);
+expect(
+    levelAnalytics.includes("createLevelAnalytics") &&
+        levelAnalytics.includes("pauseReasons") &&
+        demoAnalytics.includes("completeDemoLevel") &&
+        read("src/game/demoScene.ts").includes("completeDemoLevel(nextScore)"),
+    "demo must exercise the reusable pause-aware level analytics implementation",
+);
+expect(
     monetizationGuide.includes("## What counts as Run Bits monetization") &&
         monetizationGuide.includes("rundot/shop.config.json") &&
         monetizationGuide.includes('"price": { "type": "bucks", "value": "100" }') &&
@@ -232,6 +255,7 @@ for (const required of [
     "LICENSE.md",
     "SECURITY.md",
     "THIRD_PARTY_NOTICES.md",
+    "docs/analytics.md",
     "docs/audio.md",
     "docs/deterministic-simulation.md",
     "docs/monetization.md",

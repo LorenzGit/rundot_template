@@ -60,6 +60,15 @@ one resize/lifecycle coordinator, and explicit input ownership. Read
 [`docs/rendering-architecture.md`](docs/rendering-architecture.md) before
 changing renderer composition.
 
+Level-, wave-, round-, and run-based games must instrument the real core-loop
+entry, completion, restart, and explicit abandonment transitions. Start from
+the pause-aware machinery in `src/systems/levelAnalytics.ts`, adapt the demo
+call sites to the derived game's authoritative outcomes, and keep event names
+and property meanings stable after release. Completion telemetry must include
+active duration and attempt count; host pause/sleep, browser hiding, ads, and
+game-owned waiting states must not inflate play time. Read
+[`docs/analytics.md`](docs/analytics.md) before changing instrumentation.
+
 All renderer creation and destruction must go through the realm-wide manager in
 `src/rendering/rendererLifecycle.ts`. It serializes initialization, fallback,
 cancellation cleanup, and teardown so React StrictMode, route changes, HMR, and

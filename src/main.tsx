@@ -9,6 +9,7 @@ import { saveSystem } from "./systems/save.ts";
 import { restoreLocale } from "./systems/localization.ts";
 import { audioManager } from "./audio/audioManager.ts";
 import { runtimeServices } from "./systems/runtimeServices.ts";
+import { abandonDemoLevel, demoLevelAnalytics } from "./systems/demoAnalytics.ts";
 import { installBrowserQaContract } from "./qa/browserContract.ts";
 import "./styles/app.css";
 
@@ -73,21 +74,25 @@ async function boot() {
     //    before they land.
     registerLifecycles({
         onPause: () => {
+            demoLevelAnalytics.setPaused("host_pause", true);
             store.patch({ paused: true });
             audioManager.setPaused(true);
             void saveSystem.flush();
         },
         onResume: () => {
+            demoLevelAnalytics.setPaused("host_pause", false);
             store.patch({ paused: false });
             audioManager.setPaused(false);
             runtimeServices.resume();
         },
         onSleep: () => {
+            demoLevelAnalytics.setPaused("host_sleep", true);
             store.patch({ paused: true });
             audioManager.setPaused(true);
             void saveSystem.flush();
         },
         onAwake: () => {
+            demoLevelAnalytics.setPaused("host_sleep", false);
             store.patch({ paused: false });
             audioManager.setPaused(false);
             runtimeServices.resume();
@@ -104,6 +109,7 @@ async function boot() {
         onBackButton: () => {
             const state = store.get();
             if (state.phase === "playing") {
+                abandonDemoLevel("menu_exit");
                 store.patch({ phase: "menu", menuScreen: "main", paused: false });
                 void saveSystem.flush();
             } else if (state.menuScreen === "rendering-lab") {
