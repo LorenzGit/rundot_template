@@ -23,6 +23,7 @@ import { applyRunSafeArea } from "../sdk/runSdk.ts";
 const RunFeaturesScreen = lazy(() => import("./RunFeaturesScreen.tsx"));
 const RenderingLabScreen = lazy(() => import("./RenderingLabScreen.tsx"));
 const DevelopmentTools = import.meta.env.DEV ? lazy(() => import("../dev/DevelopmentTools.tsx")) : null;
+const TOAST_AUTO_HIDE_MS = 4_000;
 
 function useOrientationSafeArea(): void {
     useEffect(() => {
@@ -98,9 +99,19 @@ function DevelopmentToolsSlot() {
 
 function Toast() {
     const toast = useStore((state) => state.toast);
+
+    useEffect(() => {
+        if (!toast) return;
+        const timeoutId = window.setTimeout(() => {
+            // Do not let an older toast's timer dismiss a newer message.
+            if (store.get().toast === toast) store.patch({ toast: null });
+        }, TOAST_AUTO_HIDE_MS);
+        return () => window.clearTimeout(timeoutId);
+    }, [toast]);
+
     if (!toast) return null;
     return (
-        <button type="button" className="toast" onClick={() => store.patch({ toast: null })}>
+        <button type="button" className="toast" aria-live="polite" onClick={() => store.patch({ toast: null })}>
             {toast}
         </button>
     );

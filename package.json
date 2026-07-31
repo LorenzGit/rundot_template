@@ -1,6 +1,6 @@
 {
   "name": "rundot_template",
-  "version": "0.10.4",
+  "version": "0.10.5",
   "description": "Production-minded RUN.world reference with PixiJS, Three.js, and hybrid WebGPU-first patterns.",
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",

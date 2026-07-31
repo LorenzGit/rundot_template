@@ -781,9 +781,17 @@ for (const browserContract of [
     "screen-scroll-region",
     "screen-end",
     "smallestText",
+    "toasts support tap dismissal and auto-hide",
 ]) {
     expect(e2eSmoke.includes(browserContract), `browser smoke coverage is missing: ${browserContract}`);
 }
+expect(
+    app.includes("TOAST_AUTO_HIDE_MS = 4_000") &&
+        app.includes("window.setTimeout") &&
+        app.includes("window.clearTimeout") &&
+        app.includes("store.get().toast === toast"),
+    "in-game toasts must auto-hide safely without an older timer clearing a replacement",
+);
 expect(
     simulation.includes("createSeededRandom") &&
         simulation.includes('ssrLoadModule("/src/game/noiseRandom.ts")') &&

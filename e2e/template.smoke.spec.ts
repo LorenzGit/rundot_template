@@ -253,3 +253,20 @@ test("development diagnostics tune only the current session", async ({ page }) =
     await page.getByRole("button", { name: "RESET SESSION TUNING" }).click();
     await expect(page.getByTestId("safe-area-guide")).toHaveCount(0);
 });
+
+test("toasts support tap dismissal and auto-hide", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=settings");
+
+    const testHaptic = page.getByRole("button", { name: "TEST" });
+    const toast = page.locator(".toast");
+
+    await testHaptic.click();
+    await expect(toast).toBeVisible();
+    await toast.click();
+    await expect(toast).toHaveCount(0);
+
+    await testHaptic.click();
+    await expect(toast).toBeVisible();
+    await expect(toast).toHaveCount(0, { timeout: 5_000 });
+});
