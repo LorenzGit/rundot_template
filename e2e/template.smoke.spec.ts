@@ -5,6 +5,7 @@ interface QaSnapshot {
     phase: "loading" | "menu" | "playing";
     menuScreen: string;
     coins: number;
+    paused: boolean;
     rendererLifecycle: {
         activeLabel: string | null;
         activeRuntimes: number;
@@ -269,4 +270,18 @@ test("toasts support tap dismissal and auto-hide", async ({ page }) => {
     await testHaptic.click();
     await expect(toast).toBeVisible();
     await expect(toast).toHaveCount(0, { timeout: 5_000 });
+});
+
+test("an unmatched host pause always has a player escape", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=game");
+
+    await page.evaluate(() => globalThis.__gameQa?.setPaused(true));
+    const resume = page.getByRole("button", { name: /paused.*tap to resume/i });
+    await expect(resume).toBeVisible();
+    expect((await readQaSnapshot(page)).paused).toBe(true);
+
+    await resume.click();
+    await expect(resume).toHaveCount(0);
+    expect((await readQaSnapshot(page)).paused).toBe(false);
 });

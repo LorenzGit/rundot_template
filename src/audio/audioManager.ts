@@ -39,7 +39,7 @@ class AudioManager {
     private suppressedSfx = 0;
     private paused = false;
     private hostPaused = false;
-    private adVisible = false;
+    private hostOverlayVisible = false;
     private pageHidden = document.visibilityState !== "visible";
     private bound = false;
 
@@ -72,15 +72,18 @@ class AudioManager {
         this.applyPauseState();
     }
 
-    /** Ads are not guaranteed to emit host lifecycle events. Keep this
-     * interruption separate from persisted player volume/mute settings. */
-    setAdVisible(visible: boolean): void {
-        this.adVisible = visible;
+    /**
+     * Host-owned UI such as ads and checkout sheets may not emit lifecycle
+     * events. Keep this interruption separate from player mute settings and
+     * host pause so one signal cannot accidentally clear another.
+     */
+    setHostOverlayVisible(visible: boolean): void {
+        this.hostOverlayVisible = visible;
         this.applyPauseState();
     }
 
     private applyPauseState(): void {
-        this.paused = this.hostPaused || this.pageHidden || this.adVisible;
+        this.paused = this.hostPaused || this.pageHidden || this.hostOverlayVisible;
         if (!this.context) return;
         if (this.paused) {
             this.stopMusic();

@@ -9,6 +9,7 @@
 import { store, useStore } from "../state/store.ts";
 import { audioManager } from "../audio/audioManager.ts";
 import { saveSystem } from "../systems/save.ts";
+import { resumeFromHostPause } from "../systems/hostPause.ts";
 
 export default function Hud() {
     const score = useStore((s) => s.score);
@@ -34,12 +35,13 @@ export default function Hud() {
                 </button>
             </div>
             {paused && (
-                <div className="pause-overlay">
+                <button type="button" className="pause-overlay pointer-events-auto" onClick={resumeFromHostPause}>
                     <div>
                         <p className="eyebrow">TAKE A BREATH</p>
                         <strong>PAUSED</strong>
+                        <span>TAP TO RESUME</span>
                     </div>
-                </div>
+                </button>
             )}
         </div>
     );

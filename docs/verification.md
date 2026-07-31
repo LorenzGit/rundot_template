@@ -56,6 +56,12 @@ serialization; hybrid renderer ownership; and console, page, GPU, and critical
 request failures. Assertions use visible UI, lifecycle diagnostics, and the
 development-only semantic QA contract.
 
+With `?qa=1`, `__gameQa.setPaused(true)` reproduces an unmatched host pause
+without a device. Every derived game that consumes lifecycle pause should keep
+an equivalent DEV-only control and an E2E assertion that the visible pause
+surface can clear it. This tests the escape path only; real callback delivery
+and host-owned ad/checkout presentation still require Playground or device QA.
+
 Browser tests never prove a real ad, purchase, entitlement, notification,
 profile, or host capability. Verify those separately through the opt-in RUN
 Playground and the final RUN host, without fabricating successful outcomes.

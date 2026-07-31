@@ -120,6 +120,9 @@ const buildCheck = read("scripts/check-build.mjs");
 const runtimeServices = read("src/systems/runtimeServices.ts");
 const levelAnalytics = read("src/systems/levelAnalytics.ts");
 const demoAnalytics = read("src/systems/demoAnalytics.ts");
+const hostPause = read("src/systems/hostPause.ts");
+const hud = read("src/ui/Hud.tsx");
+const browserQa = read("src/qa/browserContract.ts");
 
 expect(/^\d+\.\d+\.\d+$/.test(packageJson.version), "package version must be semver");
 expect(packageJson.name === "rundot_template", "package name must match the repository identity");
@@ -203,6 +206,21 @@ expect(
         demoAnalytics.includes("completeDemoLevel") &&
         read("src/game/demoScene.ts").includes("completeDemoLevel(nextScore)"),
     "demo must exercise the reusable pause-aware level analytics implementation",
+);
+expect(
+    hostPause.includes("resumeFromHostPause") &&
+        hud.includes('className="pause-overlay pointer-events-auto"') &&
+        hud.includes("onClick={resumeFromHostPause}") &&
+        browserQa.includes("setPaused(paused: boolean)"),
+    "host pauses must have a player escape and a development QA control",
+);
+expect(
+    runSdk.includes("withHostOverlay") &&
+        runSdk.includes("hostOverlayInFlight") &&
+        runSdk.includes("withHostOverlay(() => RundotGameAPI.shop.purchase") &&
+        audioManager.includes("setHostOverlayVisible") &&
+        !audioManager.includes("setAdVisible"),
+    "all host-owned monetization surfaces must share the SDK-boundary audio guard",
 );
 expect(
     monetizationGuide.includes("## What counts as Run Bits monetization") &&

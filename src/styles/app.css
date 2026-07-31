@@ -1195,7 +1195,14 @@ button:disabled {
     inset: 0;
     display: grid;
     place-items: center;
+    width: auto;
+    border: 0;
+    padding: 0;
     background: rgba(37, 24, 91, 0.72);
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
     backdrop-filter: blur(5px);
 }
 .pause-overlay > div {
@@ -1212,6 +1219,14 @@ button:disabled {
     margin-top: 4px;
     color: #ffe36d;
     font-size: 34px;
+}
+.pause-overlay span {
+    display: block;
+    margin-top: 12px;
+    color: rgba(255, 255, 255, 0.88);
+    font-size: 14px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
 }
 
 /* Development-only diagnostics. The component is removed from production

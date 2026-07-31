@@ -1,8 +1,9 @@
 import packageJson from "../../package.json";
 import { audioManager } from "../audio/audioManager.ts";
-import { getRunCapabilities } from "../sdk/runSdk.ts";
+import { getRunCapabilities, hostOverlayInFlight } from "../sdk/runSdk.ts";
 import { store } from "../state/store.ts";
 import { rendererLifecycleSnapshot } from "../rendering/rendererLifecycle.ts";
+import { setHostPaused } from "../systems/hostPause.ts";
 
 interface TemplateGameQa {
     snapshot(): Record<string, unknown>;
@@ -11,6 +12,7 @@ interface TemplateGameQa {
     openRunFeatures(): void;
     openRendererLab(): void;
     returnToMenu(): void;
+    setPaused(paused: boolean): void;
 }
 
 declare global {
@@ -34,6 +36,7 @@ export function installBrowserQaContract(): void {
                 renderer: document.documentElement.dataset.renderer ?? "pending",
                 rendererLifecycle: rendererLifecycleSnapshot(),
                 host: getRunCapabilities().host,
+                hostOverlayInFlight: hostOverlayInFlight(),
                 audio: audioManager.debugSnapshot(),
             };
         },
@@ -51,6 +54,9 @@ export function installBrowserQaContract(): void {
         },
         returnToMenu() {
             store.patch({ phase: "menu", menuScreen: "main" });
+        },
+        setPaused(paused) {
+            setHostPaused("host_pause", paused);
         },
     };
 }

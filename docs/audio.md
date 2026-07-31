@@ -14,10 +14,11 @@
 - Gameplay: the same identity with a slightly fuller motif; no hard transition.
 - Pause/sleep/background: stop scheduling and suspend the shared audio context.
 - Resume: restart from the current harmonic step after the context resumes.
-- Ad presentation: the RUN facade explicitly suspends the shared audio context
-  around rewarded and interstitial SDK calls because ads do not reliably emit
-  lifecycle callbacks. Returning from an ad resumes only when the player has
-  not muted the relevant channel and the app is not otherwise paused/hidden.
+- Host overlays: the RUN facade explicitly suspends the shared audio context
+  around rewarded ads, interstitials, and Shop checkout because host-owned UI
+  does not reliably emit lifecycle callbacks. A counted guard handles overlap;
+  audio resumes only after the final surface closes and the player has not
+  muted the relevant channel and the app is not otherwise paused/hidden.
 - Music is procedural and local. It uses no generated asset, RUN credits, or
   external license.
 
@@ -47,6 +48,6 @@ end, and the master bus has conservative dynamics compression.
 - The development `?qa=1` contract reports context state, scheduler state,
   active music/SFX voices, scheduled notes, and suppressed rapid cues.
 - Verify first unlock, Music/SFX off independently, repeated bounce limits,
-  pause/resume, background/foreground, ad open/close (including closing while
-  the app is paused), reload persistence, and phone/headphone mix in every
-  derived game.
+  pause/resume, background/foreground, ad and checkout open/close (including
+  closing while the app is paused), reload persistence, and phone/headphone mix
+  in every derived game.

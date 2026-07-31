@@ -8,8 +8,13 @@
 - Boot/resume refresh trusted time and LiveOps in parallel, then re-arm a return notification only after confirmed consent.
 - LiveOps refreshes once at `nextChangeAt`; it does not poll per frame.
 - Sleep/quit only flush save and pause audio. They do not start fresh notification/network work.
-- Pause and sleep both freeze gameplay; resume and awake both recover it. Browser
-  visibility independently stops the Pixi ticker without clearing a host-owned pause.
+- Pause and sleep both freeze gameplay. Their reasons are tracked independently,
+  so `onResume` cannot clear a still-active sleep and `onAwake` cannot clear a
+  still-active pause. Browser visibility independently stops the Pixi ticker.
+- A host pause is an external interruption, not a player-owned modal state. The
+  pause scrim therefore has a tap-to-resume escape: if it can receive the tap,
+  no host sheet is covering the game. Do not copy Leadlight's automatic
+  self-heal into timed or real-time games; only the manual escape is universal.
 - Android back closes gameplay or the current submenu first, then calls
   `requestPopOrQuit()` when the template navigation stack is empty.
 - Identity changes trigger a clean reload when the profile ID changes. The game never flushes one player's in-memory state under another identity.
@@ -79,6 +84,10 @@ autoplay. These are browser features, not additional SDK namespaces.
 - Ads return `verified | unavailable | cancelled | failed`; Run Bits Shop
   checkout returns the same recoverable result union. Only `verified` may
   proceed to placement-specific reconciliation or grant logic.
+- Rewarded ads, interstitials, and Shop checkout all run through one counted
+  host-overlay guard in `runSdk.ts`. Audio remains suspended until the last
+  host-owned surface closes; checkout is not protected by an assumed lifecycle
+  pause and is never abandoned by a client-side timeout.
 
 ## LiveOps keys
 

@@ -9,7 +9,8 @@ import { saveSystem } from "./systems/save.ts";
 import { restoreLocale } from "./systems/localization.ts";
 import { audioManager } from "./audio/audioManager.ts";
 import { runtimeServices } from "./systems/runtimeServices.ts";
-import { abandonDemoLevel, demoLevelAnalytics } from "./systems/demoAnalytics.ts";
+import { abandonDemoLevel } from "./systems/demoAnalytics.ts";
+import { resumeFromHostPause, setHostPaused } from "./systems/hostPause.ts";
 import { installBrowserQaContract } from "./qa/browserContract.ts";
 import "./styles/app.css";
 
@@ -74,28 +75,18 @@ async function boot() {
     //    before they land.
     registerLifecycles({
         onPause: () => {
-            demoLevelAnalytics.setPaused("host_pause", true);
-            store.patch({ paused: true });
-            audioManager.setPaused(true);
+            setHostPaused("host_pause", true);
             void saveSystem.flush();
         },
         onResume: () => {
-            demoLevelAnalytics.setPaused("host_pause", false);
-            store.patch({ paused: false });
-            audioManager.setPaused(false);
-            runtimeServices.resume();
+            setHostPaused("host_pause", false);
         },
         onSleep: () => {
-            demoLevelAnalytics.setPaused("host_sleep", true);
-            store.patch({ paused: true });
-            audioManager.setPaused(true);
+            setHostPaused("host_sleep", true);
             void saveSystem.flush();
         },
         onAwake: () => {
-            demoLevelAnalytics.setPaused("host_sleep", false);
-            store.patch({ paused: false });
-            audioManager.setPaused(false);
-            runtimeServices.resume();
+            setHostPaused("host_sleep", false);
         },
         onQuit: () => {
             void saveSystem.flush();
@@ -110,7 +101,8 @@ async function boot() {
             const state = store.get();
             if (state.phase === "playing") {
                 abandonDemoLevel("menu_exit");
-                store.patch({ phase: "menu", menuScreen: "main", paused: false });
+                resumeFromHostPause();
+                store.patch({ phase: "menu", menuScreen: "main" });
                 void saveSystem.flush();
             } else if (state.menuScreen === "rendering-lab") {
                 store.patch({ menuScreen: "run-features" });
