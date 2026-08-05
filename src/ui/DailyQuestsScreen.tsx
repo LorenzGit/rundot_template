@@ -2,7 +2,7 @@ import { useState } from "react";
 import { audioManager } from "../audio/audioManager.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
-import { t } from "../systems/localization.ts";
+import { formatNumber, t } from "../systems/localization.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
@@ -20,7 +20,7 @@ export default function DailyQuestsScreen() {
         setBusyId(questId);
         const result = await dailySystems.claimQuest(questId);
         setBusyId(null);
-        store.patch({ toast: result.ok ? `+${result.coins} COINS` : result.reason });
+        store.patch({ toast: result.ok ? `+${formatNumber(result.coins)} COINS` : result.reason });
         if (result.ok) {
             audioManager.play("reward");
             void runtimeServices.haptic("success");
@@ -37,7 +37,7 @@ export default function DailyQuestsScreen() {
                         <div>
                             <strong>{quest.label}</strong>
                             <span>
-                                {Math.min(quest.value, quest.target)} / {quest.target}
+                                {formatNumber(Math.min(quest.value, quest.target))} / {formatNumber(quest.target)}
                             </span>
                         </div>
                         <progress value={Math.min(quest.value, quest.target)} max={quest.target} />
@@ -51,7 +51,7 @@ export default function DailyQuestsScreen() {
                                 : quest.claimed
                                   ? "CLAIMED"
                                   : quest.claimable
-                                    ? `CLAIM ${quest.reward}`
+                                    ? `CLAIM ${formatNumber(quest.reward)}`
                                     : "IN PROGRESS"}
                         </button>
                     </article>

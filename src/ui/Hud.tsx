@@ -7,9 +7,9 @@
  * header.
  */
 import { store, useStore } from "../state/store.ts";
-import { audioManager } from "../audio/audioManager.ts";
 import { saveSystem } from "../systems/save.ts";
 import { resumeFromHostPause } from "../systems/hostPause.ts";
+import { formatNumber } from "../systems/localization.ts";
 
 export default function Hud() {
     const score = useStore((s) => s.score);
@@ -20,13 +20,12 @@ export default function Hud() {
                 {/* ADAPT: demo counter — replace with real HUD (currencies, wave, timer...) */}
                 <div className="hud-score">
                     <span>BOUNCES</span>
-                    <strong>{score}</strong>
+                    <strong>{formatNumber(score)}</strong>
                 </div>
                 <button
                     type="button"
                     className="hud-menu pointer-events-auto"
                     onClick={() => {
-                        audioManager.play("tap");
                         store.patch({ phase: "menu", menuScreen: "main" });
                         void saveSystem.flush();
                     }}

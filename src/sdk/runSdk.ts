@@ -9,6 +9,7 @@
  */
 import RundotGameAPI from "@series-inc/rundot-game-sdk/api";
 import { audioManager } from "../audio/audioManager.ts";
+import { safeAreaOffsetsForFrame } from "./safeArea.ts";
 // Type-only import from the package root (the /api entry doesn't re-export it);
 // erased at build time, so no extra runtime code is pulled in.
 import { HapticFeedbackStyle } from "@series-inc/rundot-game-sdk";
@@ -141,10 +142,21 @@ export function applyRunSafeArea(): Readonly<RunSafeArea> {
     // Outside RUN, leave the stylesheet's ViewDeck/browser fallback chain
     // intact. Publishing zero-valued host data would erase real device insets.
     if (!_ready) return area;
-    root.style.setProperty("--safe-top", `${area.top}px`);
-    root.style.setProperty("--safe-right", `${area.right}px`);
-    root.style.setProperty("--safe-bottom", `${area.bottom}px`);
-    root.style.setProperty("--safe-left", `${area.left}px`);
+    // Host insets are viewport-relative, but #app-frame is letterboxed: on any
+    // viewport wider than --game-w, raw values overpad the frame by the gutter.
+    // Convert to frame-local offsets, clamped at zero because --safe-* is
+    // consumed as padding.
+    const frame = document.getElementById("app-frame");
+    const local = frame
+        ? safeAreaOffsetsForFrame(area, frame.getBoundingClientRect(), {
+              width: window.innerWidth,
+              height: window.innerHeight,
+          })
+        : area;
+    root.style.setProperty("--safe-top", `${Math.max(0, local.top)}px`);
+    root.style.setProperty("--safe-right", `${Math.max(0, local.right)}px`);
+    root.style.setProperty("--safe-bottom", `${Math.max(0, local.bottom)}px`);
+    root.style.setProperty("--safe-left", `${Math.max(0, local.left)}px`);
     return area;
 }
 
@@ -338,6 +350,66 @@ export async function recordFunnelStep(step: number, name: string, funnel: strin
     }
 }
 
+/**
+ * Cancel a scheduled local notification. Used as the retention kill switch:
+ * once the reward a reminder promised has been claimed, the reminder must go.
+ */
+export async function cancelLocalNotification(id: string): Promise<void> {
+    if (!capabilities.notifications) return;
+    try {
+        await withTimeout(RundotGameAPI.notifications.cancelNotification(id), 1_500, "notifications.cancel");
+    } catch (error) {
+        console.warn("[runSdk] notification cancel failed", error);
+    }
+}
+
+/**
+ * How this session was launched (notification tap, share, deep link, or cold).
+ * Returns null when the host cannot answer — `timed_out` is deliberately
+ * treated as "unknown", never as "organic", so attribution stays honest.
+ */
+export async function resolveLaunchIntent(): Promise<{ kind: string; params: Record<string, string> } | null> {
+    if (!_ready) return null;
+    try {
+        const intent = await withTimeout(
+            RundotGameAPI.app.resolveLaunchIntent({ maxWaitMs: 800 }),
+            1_500,
+            "app.resolveLaunchIntent",
+        );
+        if (!intent || intent.kind === "timed_out") return null;
+        return { kind: intent.kind, params: intent.params ?? {} };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Landing attribution (UTM / click ids), merged into `session_start` so paid
+ * and organic cohorts are separable without a dashboard join. Web-only and
+ * best-effort: the namespace is absent in most hosts, so absence is normal and
+ * must never delay boot.
+ */
+export async function readAttribution(): Promise<Record<string, string>> {
+    const fields: Record<string, string> = {};
+    if (!sdkNamespace("attribution")) return fields;
+    try {
+        const params = await withTimeout(
+            RundotGameAPI.attribution.getAttributionParams(),
+            1_500,
+            "attribution.getAttributionParams",
+        );
+        if (!params) return fields;
+        const source = params as unknown as Record<string, unknown>;
+        for (const field of ["utm_source", "utm_medium", "utm_campaign", "fbclid", "gclid"] as const) {
+            const value = source[field];
+            if (typeof value === "string" && value !== "") fields[field] = value;
+        }
+    } catch {
+        // attribution is observational; never let it block or throw into boot
+    }
+    return fields;
+}
+
 export async function rearmLocalNotification(input: {
     id: string;
     legacyIds?: readonly string[];
@@ -358,6 +430,10 @@ export async function rearmLocalNotification(input: {
                 delaySeconds: Math.max(60, input.delaySeconds),
                 notificationId: input.id,
                 collapseKey: input.id,
+                // Rides back to us as `LaunchIntent.params` when the player taps
+                // the notification — without it a notification-driven return is
+                // indistinguishable from an organic one.
+                payload: { reminder_id: input.id },
             }),
             3_000,
             "notifications.submitMessage",
@@ -382,15 +458,43 @@ export function hostOverlayInFlight(): boolean {
  * Own the complete lifetime of host-mediated UI at the SDK boundary. The
  * counter makes overlapping surfaces safe and keeps audio suspended until the
  * final surface closes.
+ *
+ * Exported: game code opening any host-owned surface of its own (an offer
+ * sheet, an external link) must reuse this guard rather than reinventing it.
  */
-async function withHostOverlay<T>(run: () => Promise<T>): Promise<T> {
+export async function withHostOverlay<T>(run: () => Promise<T>): Promise<T> {
     hostOverlayCount += 1;
     if (hostOverlayCount === 1) audioManager.setHostOverlayVisible(true);
     try {
         return await run();
     } finally {
-        hostOverlayCount -= 1;
+        // Clamped so a double-release can never leave the count negative and
+        // the audio guard permanently stuck.
+        hostOverlayCount = Math.max(0, hostOverlayCount - 1);
         if (hostOverlayCount === 0) audioManager.setHostOverlayVisible(false);
+    }
+}
+
+/** True when the host can currently show a rewarded ad. */
+export async function isRewardedAdReady(): Promise<boolean> {
+    if (!capabilities.ads) return false;
+    try {
+        return (await withTimeout(RundotGameAPI.ads.isRewardedAdReadyAsync(), 2_000, "ads.ready")) === true;
+    } catch {
+        return false;
+    }
+}
+
+/** True when the host can currently show an interstitial. */
+export async function isInterstitialAdReady(): Promise<boolean> {
+    if (!capabilities.ads) return false;
+    try {
+        return (
+            (await withTimeout(RundotGameAPI.ads.isInterstitialAdReadyAsync(), 2_000, "ads.interstitial.ready")) ===
+            true
+        );
+    } catch {
+        return false;
     }
 }
 
@@ -437,6 +541,113 @@ export async function purchaseVerifiedShopItem(itemId: string, idempotencyKey: s
         return result.success === true ? "verified" : "failed";
     } catch {
         return "failed";
+    }
+}
+
+/**
+ * Live catalog price for a shop item, as a display string.
+ *
+ * Never fall back to a hardcoded number here: a stale price in the UI is a
+ * promise the checkout will not keep. `null` means "unknown", and the caller
+ * hides the price rather than inventing one.
+ */
+export async function readShopPrice(itemId: string): Promise<string | null> {
+    if (!capabilities.purchases || !sdkNamespace("shop")) return null;
+    try {
+        const item = await withTimeout(RundotGameAPI.shop.getItemDetail(itemId), 4_000, "shop.getItemDetail");
+        const value = item?.price?.value;
+        return typeof value === "string" ? value : typeof value === "number" ? String(value) : null;
+    } catch (error) {
+        console.warn("[runSdk] shop price unavailable", error);
+        return null;
+    }
+}
+
+export interface OwnedEntitlement {
+    id: string;
+    quantity: number;
+    consumable: boolean;
+}
+
+/**
+ * Active entitlements for this game, or `null` when the host cannot be asked.
+ *
+ * `null` is deliberately distinct from `[]`: an empty list means the player
+ * genuinely owns nothing, while null must never revoke a live grant.
+ */
+export async function listEntitlements(): Promise<OwnedEntitlement[] | null> {
+    if (!_ready || !sdkNamespace("entitlements")) return null;
+    try {
+        const entitlements = await withTimeout(
+            RundotGameAPI.entitlements.listEntitlements(),
+            4_000,
+            "entitlements.list",
+        );
+        return entitlements
+            .filter((entry) => entry.status === "active" && entry.quantity > 0)
+            .map((entry) => ({ id: entry.entitlementId, quantity: entry.quantity, consumable: entry.consumable }));
+    } catch (error) {
+        console.warn("[runSdk] entitlement read failed", error);
+        return null;
+    }
+}
+
+/**
+ * Consume a consumable entitlement and run `grant` exactly once on success.
+ *
+ * This is the SDK's documented retry shape: the first call generates a
+ * referenceId, and if anything after it throws we retry with that same id so
+ * the server treats it as the same request. Without that, a failure between
+ * "server consumed" and "client saved" would either lose the purchase or pay
+ * it out twice.
+ *
+ * @returns true when the quantity was consumed and the grant applied.
+ */
+export async function consumeEntitlement(
+    entitlementId: string,
+    quantity: number,
+    grant: () => void | Promise<void>,
+    reason = "template-grant",
+): Promise<boolean> {
+    if (!_ready || !sdkNamespace("entitlements") || quantity <= 0) return false;
+    let referenceId: string | undefined;
+    // Tracked separately from `referenceId` because the outer promise can
+    // still reject after the callback has already paid out — retrying under
+    // the same reference is correct, granting a second time is not.
+    let granted = false;
+    try {
+        await withTimeout(
+            RundotGameAPI.entitlements.consumeEntitlement(
+                entitlementId,
+                quantity,
+                async (_entitlement, usedReferenceId) => {
+                    referenceId = usedReferenceId;
+                    await grant();
+                    granted = true;
+                },
+                reason,
+            ),
+            10_000,
+            "entitlements.consume",
+        );
+        return true;
+    } catch (error) {
+        if (!referenceId) {
+            console.warn("[runSdk] entitlement consume failed", error);
+            return false;
+        }
+        try {
+            await withTimeout(
+                RundotGameAPI.entitlements.consumeEntitlement(entitlementId, quantity, undefined, reason, referenceId),
+                10_000,
+                "entitlements.consume.retry",
+            );
+            if (!granted) await grant();
+            return true;
+        } catch (retryError) {
+            console.warn("[runSdk] entitlement consume retry failed", retryError);
+            return false;
+        }
     }
 }
 

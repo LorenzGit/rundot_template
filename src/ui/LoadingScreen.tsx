@@ -1,8 +1,11 @@
 /**
- * Loading screen shown while warmAssets() runs. Rendered by React, revealed
- * when the boot cover lifts, driven by store.loadProgress.
+ * React loading screen — a safety net only. The HTML #boot-cover stays on top
+ * for the entire load gate (setBootProgress in main.tsx drives its bar with
+ * real progress), so this screen is normally never seen; it matters only if
+ * the cover is lifted early (30s safety timeout, boot failure).
  */
 import { useStore } from "../state/store.ts";
+import { formatNumber } from "../systems/localization.ts";
 
 export default function LoadingScreen() {
     const progress = useStore((s) => s.loadProgress);
@@ -21,7 +24,7 @@ export default function LoadingScreen() {
             <div className="loading-track" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
                 <div className="loading-fill" style={{ width: `${pct}%` }} />
             </div>
-            <p className="loading-copy">BUILDING THE FUN… {pct}%</p>
+            <p className="loading-copy">BUILDING THE FUN… {formatNumber(pct)}%</p>
         </main>
     );
 }

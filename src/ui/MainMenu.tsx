@@ -1,7 +1,6 @@
 import packageJson from "../../package.json";
-import { audioManager } from "../audio/audioManager.ts";
 import { saveSystem } from "../systems/save.ts";
-import { t } from "../systems/localization.ts";
+import { formatNumber, t } from "../systems/localization.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
 import { startDemoLevel } from "../systems/demoAnalytics.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
@@ -71,27 +70,20 @@ function MenuIcon({ name }: { name: MenuIconName }) {
     );
 }
 
-async function activate(action: () => void): Promise<void> {
-    await audioManager.unlock();
-    audioManager.play("tap");
-    void runtimeServices.haptic("light");
-    action();
-}
-
 export default function MainMenu() {
     useStore((state) => state.locale);
     const coins = useStore((state) => state.coins);
     const level = useStore((state) => state.level);
 
-    const play = () =>
-        void activate(() => {
-            audioManager.play("start");
-            runtimeServices.funnel(2, "demo_started", "template_first_play", 1);
-            store.patch({ phase: "playing", score: 0, totalPlays: store.get().totalPlays + 1 });
-            startDemoLevel();
-            dailySystems.recordQuestProgress("plays");
-            void saveSystem.flush();
-        });
+    // Click sound + haptic come from useButtonFeedback (App.tsx) — the
+    // .play-button class maps to the heavier "start" cue there.
+    const play = () => {
+        runtimeServices.funnel(2, "demo_started", "template_first_play", 1);
+        store.patch({ phase: "playing", score: 0, totalPlays: store.get().totalPlays + 1 });
+        startDemoLevel();
+        dailySystems.recordQuestProgress("plays");
+        void saveSystem.flush();
+    };
 
     return (
         <main className="menu-shell pt-safe-top pb-safe-bottom">
@@ -115,13 +107,13 @@ export default function MainMenu() {
                         <span />
                         <span />
                     </span>
-                    <span>LEVEL {level}</span>
+                    <span>LEVEL {formatNumber(level)}</span>
                 </div>
                 <div className="player-currency">
                     <span className="coin-glyph" aria-hidden="true">
                         C
                     </span>
-                    <strong>{coins.toLocaleString()}</strong>
+                    <strong>{formatNumber(coins)}</strong>
                 </div>
             </section>
 
@@ -140,7 +132,7 @@ export default function MainMenu() {
                         type="button"
                         className={`menu-tile menu-tile-${accent}`}
                         key={screen}
-                        onClick={() => void activate(() => store.patch({ menuScreen: screen }))}
+                        onClick={() => store.patch({ menuScreen: screen })}
                     >
                         <span className="menu-icon" aria-hidden="true">
                             <MenuIcon name={icon} />

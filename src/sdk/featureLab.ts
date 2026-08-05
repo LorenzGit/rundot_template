@@ -7,7 +7,9 @@
  */
 import RundotGameAPI from "@series-inc/rundot-game-sdk/api";
 import { getRunCapabilities, withTimeout } from "./runSdk.ts";
+import { formatNumber } from "../systems/localization.ts";
 
+import { analytics } from "../systems/analytics/analyticsConfig.ts";
 export type RunDemoStatus = "verified" | "partial" | "unavailable" | "cancelled" | "failed";
 
 export interface RunDemoResult {
@@ -62,7 +64,7 @@ function summarizeProbes(probes: ProbeResult[], prefix: string): RunDemoResult {
     const status = available.length === probes.length ? "verified" : "partial";
     return {
         status,
-        message: `${prefix}: ${available.map((result) => result.detail).join(" · ")} · ${available.length}/${probes.length}`,
+        message: `${prefix}: ${available.map((result) => result.detail).join(" · ")} · ${formatNumber(available.length)}/${formatNumber(probes.length)}`,
     };
 }
 
@@ -110,7 +112,7 @@ export async function inspectRunHost(): Promise<RunDemoResult> {
                 await RundotGameAPI.gamepad.ready();
                 return RundotGameAPI.gamepad.isSupported() ? RundotGameAPI.gamepad.getGamepads().length : 0;
             },
-            (count) => `${count} PADS`,
+            (count) => `${formatNumber(count)} PADS`,
         ),
         probe(
             "attribution",
@@ -125,7 +127,7 @@ export async function inspectRunHost(): Promise<RunDemoResult> {
         probe(
             "release notes",
             () => RundotGameAPI.app.getReleaseNotesAsync(),
-            (notes) => `${notes.length} NOTES`,
+            (notes) => `${formatNumber(notes.length)} NOTES`,
         ),
         probe(
             "trusted time",
@@ -139,11 +141,22 @@ export async function inspectRunHost(): Promise<RunDemoResult> {
         ),
         probe(
             "feature controls",
-            async () =>
-                Promise.all([
+            async () => {
+                const [flag, gate] = await Promise.all([
                     RundotGameAPI.getFeatureFlag({ flagName: "template_feature_lab" }),
                     RundotGameAPI.getFeatureGate({ gateName: "template_feature_lab" }),
-                ]),
+                ]);
+                // Reading a variant only produces useful data if the exposure is
+                // recorded: without it there is no way to compare behaviour
+                // between the players who got each branch.
+                analytics.event("feature_flag_read", { flag: "template_feature_lab", enabled: flag === true });
+                analytics.experimentExposure({
+                    name: "template_feature_lab",
+                    variant: String(gate),
+                    group: flag === true ? "enabled" : "disabled",
+                });
+                return [flag, gate];
+            },
             () => "FLAGS",
         ),
         probe(
@@ -265,37 +278,38 @@ export async function inspectRunPlayerServices(): Promise<RunDemoResult> {
         probe(
             "shop",
             () => RundotGameAPI.shop.getCatalog(),
-            ({ items }) => `${items.length} SHOP ITEMS`,
+            ({ items }) => `${formatNumber(items.length)} SHOP ITEMS`,
         ),
         probe(
             "orders",
             () => RundotGameAPI.shop.getOrderHistory({ limit: 10 }),
-            ({ orders }) => `${orders.length} ORDERS`,
+            ({ orders }) => `${formatNumber(orders.length)} ORDERS`,
         ),
         probe(
             "entitlements",
             () => RundotGameAPI.entitlements.listEntitlements(),
-            (items) => `${items.length} ENTITLEMENTS`,
+            (items) => `${formatNumber(items.length)} ENTITLEMENTS`,
         ),
         probe(
             "balance",
             () => RundotGameAPI.iap.getHardCurrencyBalance(),
-            (balance) => `${RundotGameAPI.formatNumber(balance)} RUN BITS`,
+            (balance) => `${formatNumber(balance)} RUN BITS`,
         ),
         probe(
             "subscriptions",
             () => RundotGameAPI.iap.getSubscriptions(),
-            (tiers) => `${Object.values(tiers).reduce((total, items) => total + items.length, 0)} SUBSCRIPTIONS`,
+            (tiers) =>
+                `${formatNumber(Object.values(tiers).reduce((total, items) => total + items.length, 0))} SUBSCRIPTIONS`,
         ),
         probe(
             "stats",
             () => RundotGameAPI.stats.getAllValues(),
-            (stats) => `${Object.keys(stats).length} STATS`,
+            (stats) => `${formatNumber(Object.keys(stats).length)} STATS`,
         ),
         probe(
             "collectibles",
             () => RundotGameAPI.collectibles.listCards(),
-            (cards) => `${cards.length} CARDS`,
+            (cards) => `${formatNumber(cards.length)} CARDS`,
         ),
         probe(
             "credits billing",
@@ -310,12 +324,12 @@ export async function inspectRunPlayerServices(): Promise<RunDemoResult> {
         probe(
             "leaderboard rank",
             () => RundotGameAPI.leaderboard.getMyRank({ mode: "default", period: "alltime" }),
-            (rank) => `RANK ${rank.rank ?? "—"}`,
+            (rank) => `RANK ${rank.rank === null ? "—" : formatNumber(rank.rank)}`,
         ),
         probe(
             "owned UGC",
             () => RundotGameAPI.ugc.listMine({ limit: 3 }),
-            ({ entries }) => `${entries.length} UGC`,
+            ({ entries }) => `${formatNumber(entries.length)} UGC`,
         ),
     ]);
     return summarizeProbes(probes, "PLAYER DATA");
@@ -338,7 +352,7 @@ export async function shareRunScore(score: number): Promise<RunDemoResult> {
         await withTimeout(
             RundotGameAPI.social.shareLinkAsync({
                 shareParams: { route: "result", score: String(score) },
-                metadata: { title: "Pixel Foundry result", description: `Score: ${score}` },
+                metadata: { title: "Pixel Foundry result", description: `Score: ${formatNumber(score)}` },
                 slug: "pixel-foundry-result",
             }),
             INTERACTIVE_TIMEOUT_MS,
@@ -355,7 +369,7 @@ export async function composeRunSocialPost(score: number): Promise<RunDemoResult
     try {
         const result = await withTimeout(
             RundotGameAPI.social.composeSocialPostAsync({
-                text: `I scored ${score} in Pixel Foundry. Can you beat it?`,
+                text: `I scored ${formatNumber(score)} in Pixel Foundry. Can you beat it?`,
                 shareParams: { route: "result", score: String(score) },
                 title: "Pixel Foundry result",
             }),

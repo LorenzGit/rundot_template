@@ -285,3 +285,18 @@ test("an unmatched host pause always has a player escape", async ({ page }) => {
     await expect(resume).toHaveCount(0);
     expect((await readQaSnapshot(page)).paused).toBe(false);
 });
+
+test("player-visible quantities always use thousands grouping", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&numbers=large");
+
+    await expect(page.getByText("LEVEL 1,234", { exact: true })).toBeVisible();
+    await expect(page.locator(".player-currency strong")).toHaveText("1,234,567");
+
+    await page.evaluate(() => globalThis.__gameQa?.startRun());
+    await expect(page.locator(".hud-score strong")).toHaveText("1,234,567");
+
+    await page.goto("/?qa=1&numbers=large&screen=stats");
+    await expect(page.locator(".stats-grid")).toContainText("1,234,567");
+    await expect(page.locator(".stats-grid")).toContainText("1,234");
+});

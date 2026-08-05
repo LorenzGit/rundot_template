@@ -1,3 +1,4 @@
+import RundotGameAPI from "@series-inc/rundot-game-sdk/api";
 import CSV_TEXT from "../assets/strings.csv?raw";
 import { store } from "../state/store.ts";
 import { saveSystem } from "./save.ts";
@@ -47,9 +48,26 @@ export function t(key: string, params: Record<string, unknown> = {}): string {
     const localeIndex = headers.indexOf(selectedLocale);
     let value = translations?.[localeIndex] || translations?.[0] || `[[${key}]]`;
     for (const [name, replacement] of Object.entries(params)) {
-        value = value.replaceAll(`[${name}]`, String(replacement));
+        value = value.replaceAll(
+            `[${name}]`,
+            typeof replacement === "number" ? formatNumber(replacement) : String(replacement),
+        );
     }
     return value.replaceAll("\\n", "\n");
+}
+
+/**
+ * Format every player-visible quantity with locale-aware thousands grouping.
+ * English renders 1000 as 1,000; other locales use their expected separator.
+ * Keep raw numbers for state, arithmetic, IDs, analytics, and SDK payloads.
+ */
+export function formatNumber(value: number, options: Intl.NumberFormatOptions = {}): string {
+    const groupedOptions = { useGrouping: true, ...options } satisfies Intl.NumberFormatOptions;
+    try {
+        return RundotGameAPI.formatNumber(value, groupedOptions);
+    } catch {
+        return new Intl.NumberFormat(localeInfo(selectedLocale).htmlLang, groupedOptions).format(value);
+    }
 }
 
 function localeInfo(locale: Locale): (typeof LOCALES)[number] {

@@ -4,7 +4,7 @@ import {
     fetchLiveOps,
     getRunCapabilities,
     purchaseVerifiedShopItem,
-    rearmLocalNotification,
+    cancelLocalNotification,
     recordAnalytics,
     recordFunnelStep,
     showVerifiedRewardedAd,
@@ -15,7 +15,7 @@ import {
 } from "../sdk/runSdk.ts";
 import { refreshServerTime } from "./serverTime.ts";
 import { store } from "../state/store.ts";
-import { t } from "./localization.ts";
+import { returnReminders } from "./retention/retentionConfig.ts";
 
 export interface RuntimeConfig {
     dailyRewardsEnabled: boolean;
@@ -85,16 +85,23 @@ async function refreshTime(): Promise<void> {
     store.patch({ trustedTimeReady: await refreshServerTime() });
 }
 
+/**
+ * Re-anchor the whole 24/48/72h return cadence to now.
+ *
+ * This replaced a single 24h reminder. One ping gives a player exactly one
+ * chance to come back; a short cadence gives three without becoming spam, and
+ * stopping at 72h is deliberate — a fourth converts nobody and costs the
+ * notification permission the first three depend on.
+ */
 async function rearmNotifications(): Promise<void> {
     const state = store.get();
     if (!state.notificationsEnabled || state.notificationsConsent !== "granted") return;
-    await rearmLocalNotification({
-        id: RETURN_REMINDER_ID,
-        legacyIds: [LEGACY_RETURN_REMINDER_ID],
-        title: t("NotificationTitle"),
-        body: t("NotificationReEngagementBody"),
-        delaySeconds: config.notificationDelaySeconds,
-    });
+    // The pre-cadence reminder used its own id; leave it scheduled and the
+    // player gets the old generic ping alongside the new specific ones.
+    for (const legacy of [RETURN_REMINDER_ID, LEGACY_RETURN_REMINDER_ID]) {
+        await cancelLocalNotification(legacy);
+    }
+    await returnReminders.refreshAll();
 }
 
 async function refreshRuntime(): Promise<void> {
@@ -136,12 +143,35 @@ export const runtimeServices = {
     async watchResultsAd(): Promise<VerifiedActionResult> {
         if (store.get().totalPlays < 1) return "unavailable";
         if (!config.adsEnabled || !isConfiguredPlatformId(PLATFORM_IDS.rewardedResultsBonus)) return "unavailable";
-        return showVerifiedRewardedAd(PLATFORM_IDS.rewardedResultsBonus, "Results Bonus");
+        // Offered and complete are both required: offered-without-complete is a
+        // reward-or-copy problem, no-offer-at-all is an inventory one, and only
+        // the pair tells them apart. Only a verified result earned the reward —
+        // "cancelled" means the player closed the video early.
+        this.track("rewarded_ad_offered", {
+            ad_display_id: PLATFORM_IDS.rewardedResultsBonus,
+            placement: "results_bonus",
+        });
+        const result = await showVerifiedRewardedAd(PLATFORM_IDS.rewardedResultsBonus, "Results Bonus");
+        if (result === "verified") {
+            this.track("rewarded_ad_complete", {
+                ad_display_id: PLATFORM_IDS.rewardedResultsBonus,
+                placement: "results_bonus",
+            });
+        }
+        return result;
     },
     async showFeatureLabInterstitial(): Promise<VerifiedActionResult> {
         if (store.get().totalPlays < 1) return "unavailable";
         if (!config.adsEnabled || !isConfiguredPlatformId(PLATFORM_IDS.featureLabInterstitial)) return "unavailable";
-        return showVerifiedInterstitialAd(PLATFORM_IDS.featureLabInterstitial, "Feature Lab Natural Break");
+        const result = await showVerifiedInterstitialAd(
+            PLATFORM_IDS.featureLabInterstitial,
+            "Feature Lab Natural Break",
+        );
+        // Interstitial load is the number to watch against D1 when tuning ads.
+        if (result === "verified") {
+            this.track("interstitial_shown", { ad_display_id: PLATFORM_IDS.featureLabInterstitial });
+        }
+        return result;
     },
     async purchaseStarterBundle(idempotencyKey: string): Promise<VerifiedActionResult> {
         if (!config.shopEnabled || !isConfiguredPlatformId(PLATFORM_IDS.starterBundleItem)) return "unavailable";

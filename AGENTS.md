@@ -53,6 +53,16 @@ Crypto, or authoritative RUN SyncPlay code, which must use the SDK's
 server-owned `ctx.random` and certified noise functions. Read
 `docs/randomness.md` before adding game randomness.
 
+Every player-visible quantity must go through the shared `formatNumber()`
+boundary in `src/systems/localization.ts`; in English, `1000` renders as
+`1,000`. Apply it to scores, currencies, prices, rewards, progress, levels,
+ranks, stats, and numeric translation tokens. Keep state, saves, calculations,
+analytics, IDs, route parameters, dates, timers, and other semantic digit
+strings raw. Never interpolate numeric state directly into JSX or player copy,
+and do not add one-off `.toLocaleString()` calls. Preserve the automated audit
+and read [`docs/number-formatting.md`](docs/number-formatting.md) before adding
+or adapting number-bearing UI.
+
 Keep lifecycle, safe-area, accessibility, persistence, capability-gated RUN
 integration, authoritative outcomes, and cleanup generic. Do not duplicate
 those application services per renderer. A hybrid game uses one frame clock,
@@ -112,12 +122,14 @@ precedence. The skills below deliberately do **not** duplicate any of them.
   `scripts/audit-game-readiness.sh` and
   `references/GAME_READINESS_CHECKLIST.md`).
 - Assets and quality: `rundot-game-quality`, `rundot-visual-assets`,
-  `rundot-audio`, `img2threejs`, plus three local asset tools that spend no RUN
-  credits — `codex-image-gen` (OpenAI Codex CLI image generation),
+  `rundot-audio`, `img2threejs`, plus local asset tools that spend no RUN
+  credits — `grok-image-video` (Grok Build Imagine image/video tools in-session),
+  `codex-image-gen` (OpenAI Codex CLI image generation),
   `bg-removal-softshadows` (cutouts that preserve soft contact shadows), and
-  `compress-mp3-audio` (FFmpeg presets for web delivery). The latter three need
-  local tooling (a Codex CLI, Python/FFmpeg) that this template does not
-  install; each SKILL.md states its own prerequisites.
+  `compress-mp3-audio` (FFmpeg presets for web delivery). Codex / cutout /
+  audio tools need local tooling (a Codex CLI, Python/FFmpeg) that this template
+  does not install; `grok-image-video` uses Grok session tools only. Each
+  SKILL.md states its own prerequisites.
 
 Skills must stay machine-independent. `npm run test` fails on any absolute
 home-directory path or private Codex reference inside them.

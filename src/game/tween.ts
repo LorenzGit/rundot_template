@@ -86,13 +86,15 @@ export function createTweenController(): TweenController {
         };
 
         const durationMs = Math.max(1, options.durationMs || 1);
-        const initialElapsed = -Math.max(0, options.delayMs ?? 0);
+        // `elapsed` counts from zero and `update` subtracts `delayMs` when it
+        // computes progress, so starting it at -delayMs waited for the delay
+        // twice.
         const runner: ActiveTween = {
             tick: apply,
             durationMs,
             delayMs: Math.max(0, options.delayMs ?? 0),
             done: immediate,
-            elapsed: immediate ? durationMs : initialElapsed,
+            elapsed: immediate ? durationMs : 0,
             ...(onDone ? { onDone } : {}),
         };
 

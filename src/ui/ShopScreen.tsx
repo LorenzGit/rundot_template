@@ -1,35 +1,122 @@
+import { useEffect, useState } from "react";
+import { audioManager } from "../audio/audioManager.ts";
 import { getRunCapabilities } from "../sdk/runSdk.ts";
-import { t } from "../systems/localization.ts";
-import { useStore } from "../state/store.ts";
+import { formatNumber, t } from "../systems/localization.ts";
+import {
+    productView,
+    purchaseProduct,
+    reconcilePendingPurchase,
+    refreshCommerce,
+    validateCatalogInDevelopment,
+} from "../systems/monetization/commerce.ts";
+import { runtimeServices } from "../systems/runtimeServices.ts";
+import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
 export default function ShopScreen() {
-    useStore((state) => state.locale);
+    useStore(
+        (state) =>
+            `${state.locale}:${state.ownedProductIds.join(",")}:${state.pendingPurchaseIntent?.idempotencyKey ?? ""}:${state.runtimeReady}`,
+    );
+    const [busy, setBusy] = useState(false);
+    const [, setCommerceSync] = useState(0);
+
+    useEffect(() => {
+        let disposed = false;
+        // An interrupted checkout reconciles before the player can tap the
+        // card again; ownership and live prices refresh on every shop open.
+        void (async () => {
+            await reconcilePendingPurchase();
+            await refreshCommerce();
+            await validateCatalogInDevelopment();
+            if (!disposed) setCommerceSync((count) => count + 1);
+        })();
+        return () => {
+            disposed = true;
+        };
+    }, []);
+
+    // ADAPT: replace the demo cards with your products from
+    // src/systems/monetization/config.ts, one card per registry entry.
+    const bundle = productView("starter_bundle");
     const capabilities = getRunCapabilities();
-    const status =
+    const unavailable =
         capabilities.purchases || capabilities.ads
             ? "LIVEOPS + PLACEHOLDER IDS NOT CONFIGURED"
             : t("SettingsUnavailable");
+
+    const numericPrice = bundle.price !== null ? Number(bundle.price) : Number.NaN;
+    const priceLabel =
+        bundle.price === null
+            ? "PRICE NOT SYNCED"
+            : Number.isFinite(numericPrice)
+              ? `${formatNumber(numericPrice)} RUN BITS`
+              : bundle.price;
+
+    const buy = async () => {
+        await audioManager.unlock();
+        setBusy(true);
+        const outcome = await purchaseProduct(bundle.productId);
+        setBusy(false);
+        if (!outcome) {
+            store.patch({ toast: "PURCHASE NOT STARTED" });
+        } else if (outcome.status === "confirmed") {
+            store.patch({ toast: `${bundle.name} OWNED` });
+            audioManager.play("reward");
+            void runtimeServices.haptic("success");
+        } else if (outcome.status === "cancelled") {
+            store.patch({ toast: "CHECKOUT CANCELLED" });
+        } else if (outcome.status === "unknown") {
+            // The order may still settle; the pending intent survives and
+            // reconciles on the next shop open or resume.
+            store.patch({ toast: "ORDER PENDING — CHECKING AGAIN SOON" });
+        } else {
+            store.patch({ toast: "PURCHASE FAILED" });
+            audioManager.play("error");
+        }
+    };
+
     return (
         <MenuScreenLayout title={t("MenuShop")} kicker="MONETIZATION / FAIL-CLOSED">
             <p className="screen-copy">{t("ShopBody")}</p>
             <article className="shop-card">
                 <p className="eyebrow">REWARDED PLACEMENT</p>
                 <h3>RESULTS BONUS</h3>
-                <p>Reward: 100 placeholder soft currency</p>
+                <p>Reward: {formatNumber(100)} placeholder soft currency</p>
                 <button type="button" disabled>
-                    {status}
+                    {unavailable}
                 </button>
             </article>
             <article className="shop-card">
                 <p className="eyebrow">RUN SHOP PRODUCT</p>
-                <h3>STARTER BUNDLE</h3>
-                <p>Price is never invented; it must come from the live RUN catalog.</p>
-                <button type="button" disabled>
-                    {status}
+                <h3>{bundle.name}</h3>
+                <p>
+                    {bundle.owned
+                        ? bundle.ownedFromSave
+                            ? // The host could not be asked, so ownership rests on the
+                              // save's last authoritative read — never revoked by a
+                              // failed entitlement sync.
+                              "OWNED · SAVED RECORD"
+                            : "OWNED"
+                        : priceLabel}
+                </p>
+                {bundle.pendingReconciliation && !bundle.owned ? <p>LAST ORDER STILL SETTLING</p> : null}
+                <button type="button" disabled={busy || bundle.owned || !bundle.purchasable} onClick={() => void buy()}>
+                    {busy
+                        ? "OPENING CHECKOUT..."
+                        : bundle.owned
+                          ? "OWNED"
+                          : bundle.purchasable
+                            ? bundle.pendingReconciliation
+                                ? "RETRY LAST ORDER"
+                                : `BUY ${bundle.name}`
+                            : unavailable}
                 </button>
             </article>
-            <p className="safety-note">No ad reward or purchase entitlement is granted by this template screen.</p>
+            <p className="safety-note">
+                Ownership is asserted only from RUN entitlements or the save's last authoritative read of them; this
+                screen never grants anything locally.
+            </p>
         </MenuScreenLayout>
     );
 }

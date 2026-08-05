@@ -7,9 +7,8 @@ import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore, type AppState } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
-function persist(patch: Partial<AppState>, cue = true): void {
+function persist(patch: Partial<AppState>): void {
     store.patch(patch);
-    if (cue) audioManager.play("tap");
     void saveSystem.flush();
 }
 
@@ -27,7 +26,6 @@ export default function SettingsScreen() {
     const [notificationBusy, setNotificationBusy] = useState(false);
 
     const notificationToggle = async (enabled: boolean) => {
-        await audioManager.unlock();
         setNotificationBusy(true);
         const result = await setNotificationPreference(enabled);
         setNotificationBusy(false);
@@ -41,13 +39,9 @@ export default function SettingsScreen() {
         }
     };
 
-    const setLocale = (locale: string) => {
-        audioManager.play("tap");
-        selectLocale(locale);
-    };
+    const setLocale = (locale: string) => selectLocale(locale);
 
     const testHaptic = async () => {
-        await audioManager.unlock();
         audioManager.play("reward");
         const sent = await runtimeServices.haptic("success");
         store.patch({ toast: sent ? "HAPTIC SENT" : "HAPTICS NEED A SUPPORTED DEVICE" });
@@ -69,7 +63,7 @@ export default function SettingsScreen() {
                         max="1"
                         step="0.05"
                         value={state.musicVolume}
-                        onChange={(event) => persist({ musicVolume: Number(event.target.value) }, false)}
+                        onChange={(event) => persist({ musicVolume: Number(event.target.value) })}
                     />
                 </label>
                 <Toggle
@@ -85,7 +79,7 @@ export default function SettingsScreen() {
                         max="1"
                         step="0.05"
                         value={state.sfxVolume}
-                        onChange={(event) => persist({ sfxVolume: Number(event.target.value) }, false)}
+                        onChange={(event) => persist({ sfxVolume: Number(event.target.value) })}
                     />
                 </label>
                 <div className="setting-row">

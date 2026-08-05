@@ -4,14 +4,14 @@
  * resolves deployment-safe URLs. Use public/ only for files that require an
  * exact, stable name.
  *
- * Two tiers (pattern from a shipped RUN game):
- *   - 'critical'  — awaited during the loading screen. Everything the first
- *                   interactive screen needs: menu art, UI chrome, the sprites
- *                   visible in the first seconds of play.
- *   - 'deferred'  — fire-and-forget background load after boot. Sub-screen
- *                   art, late-game content, anything the player can't see yet.
+ * Boot contract:
+ *   1. Loader visible immediately
+ *   2. 'critical' awaited under the loader = only main-menu files
+ *   3. Menu shows when critical is ready
+ *   4. 'deferred' trickles after menu — never block first interaction
+ *   5. Never put videos / heavy cutscenes in either gate bundle as preloads
  *
- * Keep 'critical' small: every asset here delays first interaction.
+ * Keep 'critical' small: every asset here delays the main menu.
  */
 import type { AssetsManifest, UnresolvedAsset } from "pixi.js";
 import portraitBackdropUrl from "./art/pixel-foundry-backdrop-portrait.png";

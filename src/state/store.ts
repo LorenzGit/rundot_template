@@ -18,6 +18,14 @@ export type MenuScreen =
     | "rendering-lab"
     | "settings";
 
+/** A checkout the host may still be settling; keyed by its idempotency key. */
+export interface PendingPurchaseIntentSnapshot {
+    productId: string;
+    catalogItemId: string;
+    idempotencyKey: string;
+    startedAt: number;
+}
+
 export interface AppState {
     /** Boot and navigation state */
     phase: "loading" | "menu" | "playing";
@@ -48,6 +56,11 @@ export interface AppState {
 
     /** One-time toasts surfaced from systems/purchases/tutorials */
     toast: string | null;
+
+    /** Commerce state mirrored from save */
+    pendingPurchaseIntent: PendingPurchaseIntentSnapshot | null;
+    /** Last authoritative entitlement read; a failed read never clears this */
+    ownedProductIds: string[];
 
     /** Retention state */
     dailyRewardLastClaimDay: string | null;
@@ -86,6 +99,8 @@ let state: AppState = {
     quality: "high",
 
     toast: null,
+    pendingPurchaseIntent: null,
+    ownedProductIds: [],
     dailyRewardLastClaimDay: null,
     dailyRewardStreak: 0,
     dailyRewardClaimIds: [],

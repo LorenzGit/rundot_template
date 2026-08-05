@@ -11,6 +11,13 @@ import {
 
 type RendererPreference = "webgpu" | "webgl";
 
+/**
+ * Sticky once WebGPU has failed to initialize or draw this session. Later
+ * acquires (replay, StrictMode remount, screen change) go straight to WebGL
+ * instead of failing the same way again.
+ */
+let webGpuProvenBroken = false;
+
 function rendererBackend(app: Application): RendererPreference {
     return app.renderer.constructor.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
 }
@@ -36,6 +43,12 @@ async function initializeRenderer(
         if (initializedBackend !== preference) {
             throw new Error(`Pixi initialized ${initializedBackend} while strict ${preference} was requested`);
         }
+        // `init` resolving is NOT proof the backend works. On iOS WebKit in
+        // particular, WebGPU detection can pass, an adapter and device can be
+        // handed out, and then nothing ever draws — which reads to the player
+        // as a dead canvas with no error to catch. Force one real frame so a
+        // broken backend fails here, while it can still be swapped out.
+        app.renderer.render(app.stage);
         if (initializedBackend === "webgpu") monitorPixiWebGpuDevice(scope, app, "Pixi game");
         return app;
     } catch (error) {
@@ -57,6 +70,8 @@ export async function createPixiApp(scope: RendererLifecycleScope, host: HTMLEle
     if (rendererQuery === "webgl" || rendererQuery === "webgpu") {
         // Forced modes are strict so QA can prove each backend independently.
         app = await initializeRenderer(scope, host, rendererQuery);
+    } else if (webGpuProvenBroken) {
+        app = await initializeRenderer(scope, host, "webgl");
     } else {
         try {
             // Pixi feature detection can pass even when adapter/device creation
@@ -64,7 +79,8 @@ export async function createPixiApp(scope: RendererLifecycleScope, host: HTMLEle
             app = await initializeRenderer(scope, host, "webgpu");
         } catch (webGpuError) {
             scope.throwIfCancelled();
-            console.warn("[renderer] WebGPU initialization failed; retrying with WebGL", webGpuError);
+            webGpuProvenBroken = true;
+            console.warn("[renderer] WebGPU unusable; falling back to WebGL", webGpuError);
             app = await initializeRenderer(scope, host, "webgl");
         }
     }

@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { audioManager } from "../audio/audioManager.ts";
 import { createRendererLab, type RendererLab, type RendererLabMode } from "../rendering/createRendererLab.ts";
 import type { RendererLease } from "../rendering/rendererLifecycle.ts";
-import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
@@ -75,11 +73,8 @@ export default function RenderingLabScreen() {
         labRef.current?.value.setPaused(paused);
     }, [paused]);
 
-    const selectMode = async (nextMode: RendererLabMode): Promise<void> => {
+    const selectMode = (nextMode: RendererLabMode): void => {
         if (nextMode === mode) return;
-        await audioManager.unlock();
-        audioManager.play("tap");
-        void runtimeServices.haptic("light");
         setMode(nextMode);
     };
 
@@ -91,14 +86,10 @@ export default function RenderingLabScreen() {
             </p>
 
             <fieldset className="renderer-mode-switch" aria-label="Renderer architecture">
-                <button
-                    type="button"
-                    aria-pressed={mode === "three-only"}
-                    onClick={() => void selectMode("three-only")}
-                >
+                <button type="button" aria-pressed={mode === "three-only"} onClick={() => selectMode("three-only")}>
                     THREE ONLY
                 </button>
-                <button type="button" aria-pressed={mode === "hybrid"} onClick={() => void selectMode("hybrid")}>
+                <button type="button" aria-pressed={mode === "hybrid"} onClick={() => selectMode("hybrid")}>
                     THREE + PIXI
                 </button>
             </fieldset>

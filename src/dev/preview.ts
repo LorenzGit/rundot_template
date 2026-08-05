@@ -20,7 +20,11 @@ const MENU_SCREENS = new Set<MenuScreen>([
  */
 export function applyDevelopmentScreenPreview(): void {
     if (!import.meta.env.DEV) return;
-    const requested = new URLSearchParams(window.location.search).get("screen");
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("numbers") === "large") {
+        store.patch({ coins: 1_234_567, level: 1_234, score: 1_234_567, totalPlays: 1_234 });
+    }
+    const requested = params.get("screen");
     if (!requested) return;
     if (requested === "game") {
         store.patch({ phase: "playing", menuScreen: "main", paused: false });

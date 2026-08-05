@@ -1,10 +1,10 @@
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
-import { t } from "../systems/localization.ts";
+import { formatNumber, t } from "../systems/localization.ts";
 import { useStore } from "../state/store.ts";
 
 export default function StatsScreen() {
     const state = useStore((value) => value);
-    const stats = [
+    const stats: Array<[string, number]> = [
         ["BEST BOUNCES", state.score],
         ["TOTAL PLAYS", state.totalPlays],
         ["LEVEL", state.level],
@@ -17,7 +17,7 @@ export default function StatsScreen() {
                 {stats.map(([label, value]) => (
                     <article key={label}>
                         <span>{label}</span>
-                        <strong>{value}</strong>
+                        <strong>{formatNumber(value)}</strong>
                     </article>
                 ))}
             </div>

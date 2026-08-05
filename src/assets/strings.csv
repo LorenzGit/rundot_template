@@ -27,3 +27,9 @@ StatsBody,Your local template-session counters.,Contadores locais desta sessão 
 ButtonPlay,PLAY DEMO,JOGAR DEMO,JUGAR DEMO
 NotificationTitle,Your workshop misses you!,Sua oficina sente sua falta!,¡Tu taller te extraña!
 NotificationReEngagementBody,"A new batch of bright ideas is ready—come give it a bounce.","Um novo lote de ideias brilhantes está pronto—venha dar um salto.","Un nuevo lote de ideas brillantes está listo—ven a darle un rebote."
+NotificationDay1Title,Your daily reward is ready,Sua recompensa diária está pronta,Tu recompensa diaria está lista
+NotificationDay1Body,Claim it now to start a streak.,Resgate agora para começar uma sequência.,Recláma ahora para empezar una racha.
+NotificationDay2Title,Your streak is still alive,Sua sequência continua viva,Tu racha sigue viva
+NotificationDay2Body,One round today keeps it going.,Uma rodada hoje mantém ela ativa.,Una ronda hoy la mantiene activa.
+NotificationDay3Title,Your best score is still standing,Seu recorde ainda está de pé,Tu récord sigue en pie
+NotificationDay3Body,Beat it in one quick run.,Supere ele em uma partida rápida.,Supéralo en una partida rápida.

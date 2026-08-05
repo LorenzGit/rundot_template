@@ -1,10 +1,12 @@
 /**
- * Asset warming via Pixi Assets. Awaited during the loading screen (critical
- * bundle, with progress), then background-loads the deferred bundle.
+ * Asset warming via Pixi Assets.
+ *
+ * Boot gate: await only the critical (main-menu) bundle with progress.
+ * Deferred bundles start as fire-and-forget after the gate — they must not
+ * delay the main menu. Never put video preloads on this path.
  *
  * Failure posture: a missing asset must never brick boot. Errors are logged
- * and boot continues. The active orientation's menu art is critical; its
- * alternate composition and later-game assets are deferred.
+ * and boot continues.
  */
 import { Assets } from "pixi.js";
 import { MANIFEST, CRITICAL_BUNDLES, DEFERRED_BUNDLES } from "./manifest.ts";

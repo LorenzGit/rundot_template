@@ -12,7 +12,7 @@ import { createTweenController, ease } from "./tween.ts";
 import { createParticleEmitter } from "./particles.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
-import { completeDemoLevel } from "../systems/demoAnalytics.ts";
+import { completeDemoLevel, recordDemoInput, recordDemoScore } from "../systems/demoAnalytics.ts";
 import { store } from "../state/store.ts";
 import type { Stage } from "./stage.ts";
 
@@ -132,6 +132,7 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
         vy = (dy / distance) * speed;
         punch();
         audioManager.play("tap");
+        recordDemoInput();
         void runtimeServices.haptic("light");
         if (!reducedMotion) {
             emitter.burst(sprite.x, sprite.y, {
@@ -186,6 +187,7 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
         if (bounced) {
             const nextScore = store.get().score + 1;
             store.patch({ score: nextScore });
+            recordDemoScore(nextScore);
             dailySystems.recordQuestProgress("bounces");
             audioManager.play("bounce");
             punch();

@@ -123,6 +123,9 @@ const demoAnalytics = read("src/systems/demoAnalytics.ts");
 const hostPause = read("src/systems/hostPause.ts");
 const hud = read("src/ui/Hud.tsx");
 const browserQa = read("src/qa/browserContract.ts");
+const localization = read("src/systems/localization.ts");
+const numberFormattingGuide = read("docs/number-formatting.md");
+const numberFormattingAudit = read("scripts/check-player-number-formatting.mjs");
 
 expect(/^\d+\.\d+\.\d+$/.test(packageJson.version), "package version must be semver");
 expect(packageJson.name === "rundot_template", "package name must match the repository identity");
@@ -221,6 +224,30 @@ expect(
         audioManager.includes("setHostOverlayVisible") &&
         !audioManager.includes("setAdVisible"),
     "all host-owned monetization surfaces must share the SDK-boundary audio guard",
+);
+expect(
+    localization.includes("RundotGameAPI.formatNumber") &&
+        localization.includes("useGrouping: true") &&
+        localization.includes('typeof replacement === "number" ? formatNumber(replacement)') &&
+        numberFormattingGuide.includes("Every player-visible quantity uses thousands grouping") &&
+        numberFormattingAudit.includes("Player-facing number formatting audit passed"),
+    "player-visible quantities must use the shared locale-aware grouping boundary and audit",
+);
+for (const uiFile of [
+    "src/ui/MainMenu.tsx",
+    "src/ui/Hud.tsx",
+    "src/ui/DailyRewardsScreen.tsx",
+    "src/ui/DailyQuestsScreen.tsx",
+    "src/ui/StatsScreen.tsx",
+    "src/ui/LoadingScreen.tsx",
+    "src/ui/ShopScreen.tsx",
+    "src/ui/RunFeaturesScreen.tsx",
+]) {
+    expect(read(uiFile).includes("formatNumber("), `${uiFile} must format its player-visible numbers`);
+}
+expect(
+    !sourceFiles("src").some((sourceFile) => read(sourceFile).includes(".toLocaleString(")),
+    "source must use the shared number formatter instead of one-off toLocaleString calls",
 );
 expect(
     monetizationGuide.includes("## What counts as Run Bits monetization") &&
@@ -663,7 +690,7 @@ expect(
 );
 expect(featureLab.includes("RUN_CAPABILITIES.map"), "Feature Lab must render the complete capability catalog");
 expect(
-    featureLab.includes("TRY REWARDED +100") && featureLab.includes("TRY INTERSTITIAL"),
+    featureLab.includes("TRY REWARDED +${formatNumber(100)}") && featureLab.includes("TRY INTERSTITIAL"),
     "Feature Lab must expose both ad flows",
 );
 expect(featureLab.includes("OPEN RENDERING LAB"), "Feature Lab must expose the renderer references");
@@ -778,7 +805,7 @@ expect(
 expect(
     main.includes("if (import.meta.env.DEV)") &&
         main.includes('await import("./dev/preview.ts")') &&
-        developmentPreview.includes('new URLSearchParams(window.location.search).get("screen")'),
+        developmentPreview.includes('params.get("screen")'),
     "direct screen previews must remain development-only and query-driven",
 );
 expect(
@@ -877,6 +904,122 @@ for (const file of textFiles()) {
     expect(!/\.codex\//.test(contents), `${file} contains a private Codex path`);
     expect(!/\bgame-bot\b/i.test(contents), `${file} contains a private source reference`);
 }
+
+// Funnel registration. A portfolio audit found most shipped titles could not be
+// diagnosed for onboarding drop-off: their funnel was either never registered
+// or was a single `game_loaded` step, which proves the app booted and nothing
+// else. Enforce the shape here so every derived game inherits a diagnosable
+// funnel instead of re-deriving a boot-only one.
+const analyticsConfigPath = "src/systems/analytics/analyticsConfig.ts";
+expect(fs.existsSync(path.join(root, analyticsConfigPath)), `${analyticsConfigPath} must declare the game's funnels`);
+if (fs.existsSync(path.join(root, analyticsConfigPath))) {
+    const analyticsConfig = read(analyticsConfigPath);
+    const ftueBlock = /ftue:\s*\{[\s\S]*?steps:\s*\[([\s\S]*?)\]/.exec(analyticsConfig);
+    expect(ftueBlock !== null, "analyticsConfig must declare an `ftue` funnel with a steps array");
+    if (ftueBlock) {
+        const stepCount = (ftueBlock[1].match(/"[a-z][a-z0-9_]*"/g) ?? []).length;
+        expect(
+            stepCount >= 3,
+            `ftue funnel needs at least 3 steps (loaded -> first action -> first completion), found ${stepCount}`,
+        );
+    }
+    expect(
+        /ftue:\s*\{[\s\S]*?onceEver:\s*true/.test(analyticsConfig),
+        "ftue funnel must set `onceEver: true` so replays cannot re-fire first-run steps",
+    );
+}
+
+// Retention. A game with no reason and no reminder to come back produces the
+// same portfolio symptom every time: onboarding converts, D1 does not. The
+// cadence itself is contract-tested in test-return-reminders.ts; these checks
+// enforce that it is actually WIRED, which a unit test cannot see.
+const retentionConfigPath = "src/systems/retention/retentionConfig.ts";
+expect(fs.existsSync(path.join(root, retentionConfigPath)), `${retentionConfigPath} must declare the return cadence`);
+if (fs.existsSync(path.join(root, retentionConfigPath))) {
+    const retentionConfig = read(retentionConfigPath);
+    const reminderIds = new Set((retentionConfig.match(/id:\s*"(d\d)"/g) ?? []).map((m) => m.slice(5, -1)));
+    expect(reminderIds.size === 3, `return cadence must have 3 reminders, found ${reminderIds.size}`);
+    expect(
+        /t\("NotificationDay1Body"\)/.test(retentionConfig),
+        "reminder copy must come from the string table so it follows the player's language",
+    );
+}
+
+// Instrumentation depth. Each of these is a row that cannot be reconstructed
+// after the fact: session length needs the pause/end pair, "was this a record"
+// needs the previous value read before the write, and an experiment with no
+// exposure row cannot be compared between branches.
+const gameplaySources = sourceFiles("src")
+    .filter((file) => !/systems\/analytics\/analytics\.ts$/.test(file))
+    .map((file) => read(file))
+    .join("\n");
+expect(
+    /analytics\.sessionPause\(\)/.test(gameplaySources),
+    "session_pause must fire on the host sleep/pause lifecycle",
+);
+expect(/analytics\.sessionEnd\(\)/.test(gameplaySources), "session_end must fire on the host quit lifecycle");
+expect(/milestone_reached/.test(gameplaySources), "at least one progression milestone must be recorded");
+expect(
+    /rewarded_ad_offered/.test(gameplaySources) && /rewarded_ad_complete/.test(gameplaySources),
+    "rewarded ads must record BOTH offered and complete — one without the other cannot separate a weak reward from missing inventory",
+);
+expect(
+    /interstitial_shown/.test(gameplaySources),
+    "interstitials must record interstitial_shown to weigh ad load against retention",
+);
+expect(
+    !/getFeatureFlag\(|getFeatureGate\(|getExperiment\(/.test(gameplaySources) ||
+        /experimentExposure\(/.test(gameplaySources),
+    "reading a flag/experiment requires recording the exposure",
+);
+expect(
+    /font-variant-numeric:\s*tabular-nums/.test(read("src/styles/app.css")),
+    "numeric readouts need tabular figures or the HUD jitters as counters tick",
+);
+
+const retentionWiring = sourceFiles("src")
+    .map((file) => read(file))
+    .join("\n");
+expect(
+    /returnReminders\.refreshPrimary\(\)/.test(retentionWiring),
+    "the 24h reminder must be re-anchored at session end (onSleep/onQuit), not just at install",
+);
+expect(
+    /returnReminders\.cancel\(/.test(retentionWiring),
+    "a claimed reward must cancel its reminder — pinging about an already-claimed reward is how players mute a game",
+);
+expect(
+    /resolveReturnLaunch\(\)/.test(retentionWiring),
+    "a notification-driven launch must be resolved so returns can be attributed and deep-linked",
+);
+
+const mainSource = read("src/main.tsx");
+expect(
+    /analytics\.funnelStep\("ftue",\s*1\b/.test(mainSource),
+    "src/main.tsx must fire ftue step 1 once boot completes",
+);
+expect(
+    /analytics\.installErrorCapture\(\)/.test(mainSource),
+    "src/main.tsx must install global error capture so crashes become queryable",
+);
+expect(/analytics\.sessionStart\(/.test(mainSource), "src/main.tsx must record session_start");
+
+expect(
+    /analytics\.funnelStep\("load",\s*1\)/.test(mainSource),
+    "src/main.tsx must fire the load funnel's first step at module scope, before any await — otherwise players who quit mid-load never appear in any funnel",
+);
+expect(
+    /analytics\.markTransportReady\(\)/.test(mainSource),
+    "src/main.tsx must call markTransportReady() after SDK init so pre-init instrumentation is delivered rather than dropped",
+);
+
+const funnelStepCalls = sourceFiles("src").flatMap((file) => [
+    ...read(file).matchAll(/analytics\.funnelStep\(\s*"ftue",\s*(\d+)/g),
+]);
+expect(
+    new Set(funnelStepCalls.map((match) => match[1])).size >= 3,
+    "at least 3 distinct ftue funnel steps must be fired from gameplay code",
+);
 
 if (failures.length > 0) {
     console.error(`Template checks failed (${failures.length}):`);

@@ -19,6 +19,8 @@ import ShopScreen from "./ShopScreen.tsx";
 import StatsScreen from "./StatsScreen.tsx";
 import SettingsScreen from "./SettingsScreen.tsx";
 import { applyRunSafeArea } from "../sdk/runSdk.ts";
+import { audioManager } from "../audio/audioManager.ts";
+import { useButtonFeedback } from "./useButtonFeedback.ts";
 
 const RunFeaturesScreen = lazy(() => import("./RunFeaturesScreen.tsx"));
 const RenderingLabScreen = lazy(() => import("./RenderingLabScreen.tsx"));
@@ -30,8 +32,43 @@ function useOrientationSafeArea(): void {
         const refreshSafeArea = () => {
             applyRunSafeArea();
         };
+        // Published insets are #app-frame-relative (see applyRunSafeArea), and
+        // the frame rect moves on ANY resize — not just rotation. Coalesce
+        // resize bursts to one refresh per frame.
+        let pending = 0;
+        const refreshOnResize = () => {
+            window.cancelAnimationFrame(pending);
+            pending = window.requestAnimationFrame(refreshSafeArea);
+        };
         window.addEventListener("orientationchange", refreshSafeArea);
-        return () => window.removeEventListener("orientationchange", refreshSafeArea);
+        window.addEventListener("resize", refreshOnResize, { passive: true });
+        return () => {
+            window.removeEventListener("orientationchange", refreshSafeArea);
+            window.removeEventListener("resize", refreshOnResize);
+            window.cancelAnimationFrame(pending);
+        };
+    }, []);
+}
+
+/**
+ * Web Audio starts suspended until a real user gesture resumes it. Unlock on
+ * the FIRST interaction anywhere — never only from specific screens: unlock
+ * coverage that depends on which menus a game keeps breaks silently when a
+ * fork replaces those screens (a shipped game went fully silent exactly
+ * this way).
+ */
+function useAudioUnlock(): void {
+    useEffect(() => {
+        const unlock = () => {
+            void audioManager.unlock();
+        };
+        const options = { once: true, capture: true } as const;
+        window.addEventListener("pointerdown", unlock, options);
+        window.addEventListener("keydown", unlock, options);
+        return () => {
+            window.removeEventListener("pointerdown", unlock, options);
+            window.removeEventListener("keydown", unlock, options);
+        };
     }, []);
 }
 
@@ -71,7 +108,20 @@ function MenuRoute() {
 
 export default function App() {
     useOrientationSafeArea();
+    useAudioUnlock();
+    useButtonFeedback();
     const phase = useStore((s) => s.phase);
+
+    // Drop the HTML boot cover once we leave loading (ViewDeck can throttle rAF).
+    useEffect(() => {
+        if (phase === "loading") return;
+        const cover = document.getElementById("boot-cover");
+        if (!cover) return;
+        cover.classList.add("hidden");
+        const t = window.setTimeout(() => cover.remove(), 400);
+        return () => window.clearTimeout(t);
+    }, [phase]);
+
     return (
         <div id="app-frame" className="bg-surface text-white">
             {phase === "loading" && <LoadingScreen />}

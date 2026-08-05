@@ -123,6 +123,26 @@ implemented and verified with evidence.
 - Keep keyboard/focus behavior usable for DOM controls without weakening the
   touch-first design.
 
+### Player-visible numbers
+
+- Format every player-visible quantity through one locale-aware shared
+  formatter. English must render `1000` as `1,000`; other locales use their
+  expected grouping character.
+- Apply grouping to scores, currency and prices, rewards, XP, damage, health,
+  item counts, progress totals, levels, waves, ranks, stats, and share or
+  notification copy. Numeric translation tokens must be preformatted or
+  formatted automatically by the localization boundary.
+- Keep values numeric in state, saves, calculations, analytics, authoritative
+  SDK payloads, IDs, and route parameters. Versions, dates, clock/countdown
+  components, room codes, phone/postal numbers, and zero-padded serials retain
+  their semantic format.
+- Do not scatter raw interpolation, `.toLocaleString()`, or compact `1K`/`1.2M`
+  notation across UI code. Reflow constrained UI first; if an intentional
+  abbreviation is approved, expose the full grouped value accessibly.
+- Test at least `999`, `1,000`, a multi-million value, a negative value when
+  relevant, and the largest legitimate saved/economy value. Confirm added
+  separators do not clip, wrap, overlap, or shift critical controls.
+
 Read `references/mobile-typography.md` whenever creating, adapting, or reviewing
 text-bearing UI. Apply its role scale and rendered-size measurement rules to DOM,
 Pixi/canvas, and bitmap text.

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { audioManager } from "../audio/audioManager.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
-import { t } from "../systems/localization.ts";
+import { formatNumber, t } from "../systems/localization.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
@@ -18,7 +18,7 @@ export default function DailyRewardsScreen() {
         setBusy(true);
         const result = await dailySystems.claimDailyReward();
         setBusy(false);
-        store.patch({ toast: result.ok ? `+${result.coins} COINS` : result.reason });
+        store.patch({ toast: result.ok ? `+${formatNumber(result.coins)} COINS` : result.reason });
         if (result.ok) {
             audioManager.play("reward");
             void runtimeServices.haptic("success");
@@ -33,8 +33,8 @@ export default function DailyRewardsScreen() {
             <div className="reward-track">
                 {REWARDS.map((coins, index) => (
                     <div className={`reward-day ${view.streak === index + 1 ? "current" : ""}`} key={coins}>
-                        <span>DAY {index + 1}</span>
-                        <strong>{coins}</strong>
+                        <span>DAY {formatNumber(index + 1)}</span>
+                        <strong>{formatNumber(coins)}</strong>
                         <small>COINS</small>
                     </div>
                 ))}
@@ -45,7 +45,7 @@ export default function DailyRewardsScreen() {
                 disabled={busy || !view.ready || view.claimed}
                 onClick={() => void claim()}
             >
-                {busy ? "SAVING..." : view.claimed ? "CLAIMED TODAY" : `CLAIM ${view.reward} COINS`}
+                {busy ? "SAVING..." : view.claimed ? "CLAIMED TODAY" : `CLAIM ${formatNumber(view.reward)} COINS`}
             </button>
             <p className="safety-note">
                 Local-browser claims persist for development but are never presented as RUN-authoritative.

@@ -1,12 +1,12 @@
 import { getRunCapabilities, readAppStorage, writeAppStorage } from "../sdk/runSdk.ts";
-import { store, type AppState } from "../state/store.ts";
+import { store, type AppState, type PendingPurchaseIntentSnapshot } from "../state/store.ts";
 
 const SAVE_KEY = "rundot_template-save";
 const LEGACY_SAVE_KEYS = ["template-pixi-webgpu-save", "template-pixi-webgpu.save"] as const;
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
-export interface GameSaveV2 {
-    version: 2;
+export interface GameSaveV3 {
+    version: 3;
     settings: Pick<
         AppState,
         | "musicEnabled"
@@ -30,6 +30,8 @@ export interface GameSaveV2 {
         | "dailyQuestProgress"
         | "dailyQuestClaimIds"
     >;
+    /** v3: interrupted-checkout intent and the last authoritative ownership read */
+    commerce: Pick<AppState, "pendingPurchaseIntent" | "ownedProductIds">;
 }
 
 export type SaveSource = "run" | "local" | "defaults";
@@ -73,7 +75,35 @@ function recentStrings(value: unknown, limit: number): string[] {
     return value.filter((entry): entry is string => typeof entry === "string" && entry.length <= 160).slice(-limit);
 }
 
-function snapshot(): GameSaveV2 {
+function productIds(value: unknown): string[] {
+    if (!Array.isArray(value)) return [];
+    return value
+        .filter((entry): entry is string => typeof entry === "string" && /^[a-z][a-z0-9_]{0,63}$/.test(entry))
+        .slice(0, 64);
+}
+
+/** A malformed intent is dropped whole: a partial one could never reconcile. */
+function pendingIntentOrNull(value: unknown): PendingPurchaseIntentSnapshot | null {
+    if (!value || typeof value !== "object") return null;
+    const intent = value as Partial<PendingPurchaseIntentSnapshot>;
+    return typeof intent.productId === "string" &&
+        intent.productId.length > 0 &&
+        typeof intent.catalogItemId === "string" &&
+        intent.catalogItemId.length > 0 &&
+        typeof intent.idempotencyKey === "string" &&
+        intent.idempotencyKey.length > 0 &&
+        intent.idempotencyKey.length <= 160 &&
+        Number.isFinite(intent.startedAt)
+        ? {
+              productId: intent.productId,
+              catalogItemId: intent.catalogItemId,
+              idempotencyKey: intent.idempotencyKey,
+              startedAt: nonNegativeInteger(intent.startedAt),
+          }
+        : null;
+}
+
+function snapshot(): GameSaveV3 {
     const state = store.get();
     return {
         version: SAVE_VERSION,
@@ -103,17 +133,28 @@ function snapshot(): GameSaveV2 {
             dailyQuestProgress: state.dailyQuestProgress,
             dailyQuestClaimIds: state.dailyQuestClaimIds,
         },
+        commerce: {
+            pendingPurchaseIntent: state.pendingPurchaseIntent,
+            ownedProductIds: state.ownedProductIds,
+        },
     };
 }
 
-function migrate(raw: unknown): GameSaveV2 | null {
+function migrate(raw: unknown): GameSaveV3 | null {
     if (!raw || typeof raw !== "object") return null;
-    const candidate = raw as Omit<Partial<GameSaveV2>, "version"> & { version?: number };
-    if ((candidate.version !== 1 && candidate.version !== SAVE_VERSION) || !candidate.settings || !candidate.progress)
+    const candidate = raw as Omit<Partial<GameSaveV3>, "version"> & { version?: number };
+    if (
+        (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== SAVE_VERSION) ||
+        !candidate.settings ||
+        !candidate.progress
+    )
         return null;
     const defaults = snapshot();
     const retention =
         candidate.retention && typeof candidate.retention === "object" ? candidate.retention : defaults.retention;
+    // v2 → v3 back-fill: older saves simply have no commerce record yet.
+    const commerce =
+        candidate.commerce && typeof candidate.commerce === "object" ? candidate.commerce : defaults.commerce;
     return {
         version: SAVE_VERSION,
         settings: {
@@ -164,10 +205,14 @@ function migrate(raw: unknown): GameSaveV2 | null {
                     : {},
             dailyQuestClaimIds: recentStrings(retention.dailyQuestClaimIds, 180),
         },
+        commerce: {
+            pendingPurchaseIntent: pendingIntentOrNull(commerce.pendingPurchaseIntent),
+            ownedProductIds: productIds(commerce.ownedProductIds),
+        },
     };
 }
 
-function parse(raw: string | null): GameSaveV2 | null {
+function parse(raw: string | null): GameSaveV3 | null {
     if (!raw) return null;
     try {
         return migrate(JSON.parse(raw));
@@ -176,8 +221,8 @@ function parse(raw: string | null): GameSaveV2 | null {
     }
 }
 
-function apply(save: GameSaveV2): void {
-    store.patch({ ...save.settings, ...save.progress, ...save.retention });
+function apply(save: GameSaveV3): void {
+    store.patch({ ...save.settings, ...save.progress, ...save.retention, ...save.commerce });
 }
 
 let lastSaved = "";

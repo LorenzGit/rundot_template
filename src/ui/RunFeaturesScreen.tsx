@@ -19,6 +19,7 @@ import { getRunCapabilities, type HapticStyle, type VerifiedActionResult } from 
 import { saveSystem } from "../systems/save.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
+import { formatNumber } from "../systems/localization.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
 
 type BusyAction =
@@ -65,15 +66,9 @@ export default function RunFeaturesScreen() {
     const capabilities = getRunCapabilities();
     const runtimeConfig = runtimeServices.config;
 
-    const openRenderingLab = async () => {
-        await audioManager.unlock();
-        audioManager.play("tap");
-        void runtimeServices.haptic("light");
-        store.patch({ menuScreen: "rendering-lab" });
-    };
+    const openRenderingLab = () => store.patch({ menuScreen: "rendering-lab" });
 
     const testHaptic = async (style: HapticStyle) => {
-        await audioManager.unlock();
         setBusy("haptic");
         const sent = await runtimeServices.haptic(style);
         setBusy(null);
@@ -82,7 +77,6 @@ export default function RunFeaturesScreen() {
     };
 
     const testRewarded = async () => {
-        await audioManager.unlock();
         setBusy("rewarded");
         runtimeServices.track("ad_requested", { placementId: PLATFORM_IDS.rewardedResultsBonus, adType: "rewarded" });
         const result = await runtimeServices.watchResultsAd();
@@ -109,7 +103,6 @@ export default function RunFeaturesScreen() {
     };
 
     const testInterstitial = async () => {
-        await audioManager.unlock();
         setBusy("interstitial");
         runtimeServices.track("ad_requested", {
             placementId: PLATFORM_IDS.featureLabInterstitial,
@@ -130,7 +123,6 @@ export default function RunFeaturesScreen() {
         action: Exclude<BusyAction, "rewarded" | "interstitial" | "haptic" | null>,
         task: () => Promise<RunDemoResult>,
     ) => {
-        await audioManager.unlock();
         setBusy(action);
         try {
             const result = await task();
@@ -181,7 +173,7 @@ export default function RunFeaturesScreen() {
                     transparent Pixi HUD.
                 </p>
                 <div className="feature-actions feature-actions-single">
-                    <button type="button" disabled={busy !== null} onClick={() => void openRenderingLab()}>
+                    <button type="button" disabled={busy !== null} onClick={openRenderingLab}>
                         OPEN RENDERING LAB
                     </button>
                 </div>
@@ -193,8 +185,8 @@ export default function RunFeaturesScreen() {
                     <h3>VERIFIED AD FLOWS</h3>
                 </div>
                 <p>
-                    Rewarded grants 100 demo coins only after the SDK returns true. Interstitial is an explicit
-                    natural-break test.
+                    Rewarded grants {formatNumber(100)} demo coins only after the SDK returns true. Interstitial is an
+                    explicit natural-break test.
                 </p>
                 <div className="feature-actions">
                     <button
@@ -206,7 +198,7 @@ export default function RunFeaturesScreen() {
                             ? "PLAY DEMO ONCE"
                             : busy === "rewarded"
                               ? "WAITING FOR HOST…"
-                              : "TRY REWARDED +100"}
+                              : `TRY REWARDED +${formatNumber(100)}`}
                     </button>
                     <button
                         type="button"
@@ -337,7 +329,7 @@ export default function RunFeaturesScreen() {
             </article>
 
             <details className="capability-drawer">
-                <summary>ALL {RUN_CAPABILITIES.length} SDK CAPABILITY GROUPS</summary>
+                <summary>ALL {formatNumber(RUN_CAPABILITIES.length)} SDK CAPABILITY GROUPS</summary>
                 <div className="capability-list">
                     {RUN_CAPABILITIES.map((capability) => (
                         <article key={capability.id}>

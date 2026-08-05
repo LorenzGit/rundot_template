@@ -115,3 +115,10 @@ Report the chosen model, authority boundary, protocol/simulation version,
 configuration paths, environments and identities tested, fault evidence, and
 anything still requiring the RUN host, a deployed server bundle, or another
 player.
+
+## Resources
+
+- [rooms/ExampleRoom.ts](rooms/ExampleRoom.ts) — minimal server-authoritative
+  `GameRoom` skeleton (validate-then-apply, `sendTo` on join, `onPlayerLeave`,
+  `onRestore` persistence). Copy to `src/rooms/` and register it in
+  `rundot/realtime.config.json`.

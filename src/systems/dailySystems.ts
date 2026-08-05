@@ -1,8 +1,10 @@
 import { getRunCapabilities } from "../sdk/runSdk.ts";
+import { returnReminders } from "./retention/retentionConfig.ts";
 import { hasServerTime, localDayKey, serverNow } from "./serverTime.ts";
 import { store } from "../state/store.ts";
 import { saveSystem } from "./save.ts";
 import { runtimeServices } from "./runtimeServices.ts";
+import { formatNumber } from "./localization.ts";
 
 const REWARDS = [25, 35, 50, 65, 85, 110, 175] as const;
 const inFlight = new Set<string>();
@@ -107,12 +109,17 @@ export const dailySystems = {
             dailyRewardStreak: view.streak,
             dailyRewardClaimIds: [...state.dailyRewardClaimIds, claimId].slice(-90),
         });
-        if (ok)
+        if (ok) {
             runtimeServices.track("daily_reward_claimed", {
                 streak: view.streak,
                 coins: view.reward,
                 authoritative: view.authoritative,
             });
+            // Kill switch: the 24h reminder promises this reward. Leaving it
+            // scheduled pings the player about something they just claimed,
+            // which is how a useful notification becomes a muted one.
+            void returnReminders.cancel("d1");
+        }
         return { ok, reason: ok ? "CLAIMED" : "SAVE FAILED", coins: ok ? view.reward : 0 };
     },
 
@@ -133,9 +140,9 @@ export const dailySystems = {
         const time = gate();
         const state = store.get();
         const definitions = [
-            { id: "bounces", label: "BOUNCE 10 TIMES", target: 10, reward: 20 },
-            { id: "plays", label: "PLAY 3 RUNS", target: 3, reward: 35 },
-            { id: "coins", label: "EARN 100 COINS", target: 100, reward: 50 },
+            { id: "bounces", label: `BOUNCE ${formatNumber(10)} TIMES`, target: 10, reward: 20 },
+            { id: "plays", label: `PLAY ${formatNumber(3)} RUNS`, target: 3, reward: 35 },
+            { id: "coins", label: `EARN ${formatNumber(100)} COINS`, target: 100, reward: 50 },
         ];
         return definitions.map((quest) => {
             const claimId = `daily-quest:${time.day ?? "untrusted"}:${quest.id}`;
