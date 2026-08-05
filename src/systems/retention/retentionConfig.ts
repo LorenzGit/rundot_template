@@ -42,10 +42,11 @@ export const returnReminders = createReturnReminders({
     schedule: (input) => rearmLocalNotification(input),
     cancel: (id) => cancelLocalNotification(id),
     resolveLaunch: () => resolveLaunchIntent(),
-    isEnabled: () => {
-        const state = store.get();
-        return state.notificationsEnabled && state.notificationsConsent === "granted";
-    },
+    // The player's settings toggle is a real opt-out and does gate. The consent
+    // probe deliberately does not: it only annotates the scheduled event, so a
+    // stale or failed probe cannot silence the whole cadence.
+    isOptedOut: () => !store.get().notificationsEnabled,
+    permissionHint: () => store.get().notificationsConsent === "granted",
     track: (event, payload) => analytics.event(event, payload),
 });
 

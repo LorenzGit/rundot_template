@@ -23,7 +23,11 @@ interface Scheduled {
 }
 
 function harness(
-    options: { enabled?: boolean; launch?: { kind: string; params: Record<string, string> } | null } = {},
+    options: {
+        optedOut?: boolean;
+        permission?: boolean;
+        launch?: { kind: string; params: Record<string, string> } | null;
+    } = {},
 ) {
     const scheduled: Scheduled[] = [];
     const cancelled: string[] = [];
@@ -43,7 +47,8 @@ function harness(
             cancelled.push(id);
         },
         resolveLaunch: async () => options.launch ?? null,
-        isEnabled: () => options.enabled ?? true,
+        isOptedOut: () => options.optedOut ?? false,
+        permissionHint: () => options.permission ?? true,
         track: (event, payload) => events.push({ event, payload }),
     });
     return { reminders, scheduled, cancelled, events };
@@ -81,12 +86,36 @@ function harness(
     expect(h.scheduled[0]?.delaySeconds === 24 * 3_600, "refreshPrimary must re-anchor the 24h nudge");
 }
 
-// --- nothing is scheduled without consent ---------------------------------
+// --- an explicit player opt-out silences everything ------------------------
 {
-    const h = harness({ enabled: false });
+    const h = harness({ optedOut: true });
     await h.reminders.refreshAll();
     await h.reminders.refreshPrimary();
-    expect(h.scheduled.length === 0, "no reminder may be scheduled when notifications are off");
+    expect(h.scheduled.length === 0, "no reminder may be scheduled once the player has opted out");
+}
+
+/*
+ * Regression: a cached host-permission probe must never gate scheduling.
+ *
+ * Shipped once with `isEnabled: () => notificationsGranted`, where
+ * notificationsGranted was a single boot-time probe defaulting to false. A
+ * probe that failed, timed out, or ran before the player answered the prompt
+ * silenced the entire cadence for the session, and a mid-session grant never
+ * armed anything. The host already no-ops an unpermitted schedule, so the
+ * attempt costs nothing and the stale `false` costs every reminder.
+ */
+{
+    const h = harness({ permission: false });
+    await h.reminders.refreshAll();
+    expect(
+        h.scheduled.length === 3,
+        "a false permission probe must NOT suppress scheduling — only an explicit opt-out may",
+    );
+    const scheduledEvents = h.events.filter((e) => e.event === "retention_notification_scheduled");
+    expect(
+        scheduledEvents.every((e) => e.payload.permission_cached === false),
+        "the cached permission must ride on the scheduled event so low-permission and low-schedule are separable",
+    );
 }
 
 // --- kill switch cancels the prefixed id ----------------------------------

@@ -880,7 +880,12 @@ for (const ignored of [
 }
 
 const activeRundotFiles = fs.existsSync(path.join(root, "rundot"))
-    ? fs.readdirSync(path.join(root, "rundot")).sort()
+    ? fs
+          .readdirSync(path.join(root, "rundot"))
+          // `skills/` is CLI bookkeeping (the installed-skill manifest that
+          // `rundot skills update` diffs against), not game configuration.
+          .filter((name) => name !== "skills")
+          .sort()
     : [];
 expect(
     activeRundotFiles.length === 1 && activeRundotFiles[0] === "realtime.config.json",
@@ -942,6 +947,21 @@ if (fs.existsSync(path.join(root, retentionConfigPath))) {
     expect(
         /t\("NotificationDay1Body"\)/.test(retentionConfig),
         "reminder copy must come from the string table so it follows the player's language",
+    );
+    /*
+     * A cached host-permission probe must never gate scheduling. Shipped once
+     * as `isEnabled: () => notificationsGranted` — one boot-time probe,
+     * defaulting to false — which silently suppressed every reminder for the
+     * session whenever the probe failed, timed out, or ran before the player
+     * answered the prompt. Only an explicit player opt-out may gate.
+     */
+    expect(
+        !/isEnabled\s*:/.test(retentionConfig),
+        "retentionConfig must not pass isEnabled; use isOptedOut (player choice) and permissionHint (telemetry)",
+    );
+    expect(
+        !/isOptedOut\s*:\s*\(\)\s*=>\s*!?\s*notificationsGranted\b/.test(retentionConfig),
+        "isOptedOut must read the player's settings toggle, never a cached permission probe",
     );
 }
 
