@@ -139,6 +139,8 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
                 burst: highQuality ? 12 : 5,
                 lifeMaxMs: highQuality ? 420 : 240,
                 hue: 334,
+                // A tap tick should hang where it was struck, not drop away.
+                gravityPxPerSec2: 120,
             });
         }
     };
@@ -196,6 +198,8 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
                     burst: highQuality ? 18 : 6,
                     lifeMaxMs: highQuality ? 560 : 280,
                     hue: 42,
+                    radiusMinPx: 5,
+                    radiusMaxPx: 11,
                 });
             }
             if (nextScore === 10) {
