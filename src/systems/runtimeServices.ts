@@ -11,6 +11,7 @@ import {
     showVerifiedInterstitialAd,
     triggerHaptic,
     type HapticStyle,
+    type ShopCheckoutResult,
     type VerifiedActionResult,
 } from "../sdk/runSdk.ts";
 import { refreshServerTime } from "./serverTime.ts";
@@ -173,8 +174,15 @@ export const runtimeServices = {
         }
         return result;
     },
-    async purchaseStarterBundle(idempotencyKey: string): Promise<VerifiedActionResult> {
-        if (!config.shopEnabled || !isConfiguredPlatformId(PLATFORM_IDS.starterBundleItem)) return "unavailable";
+    /**
+     * ADAPT: prefer `purchaseProduct` in systems/monetization/commerce.ts —
+     * it runs the checkout through the purchase coordinator, so an interrupted
+     * order is reconciled instead of stranded. This is the raw one-shot call.
+     */
+    async purchaseStarterBundle(idempotencyKey: string): Promise<ShopCheckoutResult> {
+        if (!config.shopEnabled || !isConfiguredPlatformId(PLATFORM_IDS.starterBundleItem)) {
+            return { result: "unavailable" };
+        }
         return purchaseVerifiedShopItem(PLATFORM_IDS.starterBundleItem, idempotencyKey);
     },
 };

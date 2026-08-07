@@ -475,11 +475,25 @@ export async function withHostOverlay<T>(run: () => Promise<T>): Promise<T> {
     }
 }
 
+/**
+ * Budget for an ad-readiness probe.
+ *
+ * On web the host answers this from the ad SDK, which on a cold first call
+ * waits out its consent manager (~5s) and then loads the ad script (~5s). The
+ * old 2s budget expired during that first probe and reported "no ad available"
+ * on a host that was merely still warming up — while every later probe, served
+ * from the host's cache, returned instantly. That is what made rewarded ads
+ * work only sometimes.
+ */
+const AD_READY_TIMEOUT_MS = 12_000;
+
 /** True when the host can currently show a rewarded ad. */
 export async function isRewardedAdReady(): Promise<boolean> {
     if (!capabilities.ads) return false;
     try {
-        return (await withTimeout(RundotGameAPI.ads.isRewardedAdReadyAsync(), 2_000, "ads.ready")) === true;
+        return (
+            (await withTimeout(RundotGameAPI.ads.isRewardedAdReadyAsync(), AD_READY_TIMEOUT_MS, "ads.ready")) === true
+        );
     } catch {
         return false;
     }
@@ -490,8 +504,11 @@ export async function isInterstitialAdReady(): Promise<boolean> {
     if (!capabilities.ads) return false;
     try {
         return (
-            (await withTimeout(RundotGameAPI.ads.isInterstitialAdReadyAsync(), 2_000, "ads.interstitial.ready")) ===
-            true
+            (await withTimeout(
+                RundotGameAPI.ads.isInterstitialAdReadyAsync(),
+                AD_READY_TIMEOUT_MS,
+                "ads.interstitial.ready",
+            )) === true
         );
     } catch {
         return false;
@@ -501,7 +518,7 @@ export async function isInterstitialAdReady(): Promise<boolean> {
 export async function showVerifiedRewardedAd(id: string, name: string): Promise<VerifiedActionResult> {
     if (!capabilities.ads) return "unavailable";
     try {
-        const ready = await withTimeout(RundotGameAPI.ads.isRewardedAdReadyAsync(), 2_000, "ads.ready");
+        const ready = await withTimeout(RundotGameAPI.ads.isRewardedAdReadyAsync(), AD_READY_TIMEOUT_MS, "ads.ready");
         if (!ready) return "unavailable";
         // Do not timeout a user-mediated overlay: the interruption must last
         // until the host tells us it has actually closed.
@@ -519,7 +536,7 @@ export async function showVerifiedInterstitialAd(id: string, name: string): Prom
     try {
         const ready = await withTimeout(
             RundotGameAPI.ads.isInterstitialAdReadyAsync(),
-            2_000,
+            AD_READY_TIMEOUT_MS,
             "ads.interstitial.ready",
         );
         if (!ready) return "unavailable";
@@ -532,16 +549,56 @@ export async function showVerifiedInterstitialAd(id: string, name: string): Prom
     }
 }
 
-export async function purchaseVerifiedShopItem(itemId: string, idempotencyKey: string): Promise<VerifiedActionResult> {
-    if (!capabilities.purchases || !sdkNamespace("shop")) return "unavailable";
+/**
+ * Outcome of a RUN checkout, carrying enough detail to tell a clean, uncharged
+ * decline from a genuinely ambiguous one. Collapsing these (as a bare
+ * `catch { return "failed" }` does) makes every dismissed top-up sheet look
+ * like an in-flight order.
+ */
+export type ShopCheckoutResult =
+    | { result: "verified" }
+    /** The RUN shop is not reachable from this host at all. */
+    | { result: "unavailable" }
+    /** The host returned a structured verdict; `code` is `RundotApiError.code`. */
+    | { result: "rejected"; code: string; message: string }
+    /** No verdict ever arrived — transport failure, timeout, or an unsettled order. */
+    | { result: "indeterminate"; message: string };
+
+/** The only order status that means the player has actually been served. */
+const FULFILLED_ORDER_STATUS = "fulfilled";
+
+export async function purchaseVerifiedShopItem(itemId: string, idempotencyKey: string): Promise<ShopCheckoutResult> {
+    if (!capabilities.purchases || !sdkNamespace("shop")) return { result: "unavailable" };
     try {
         // Checkout is host-owned UI. A timeout would clear the audio guard
         // while the purchase sheet could still be open, so wait for the host.
-        const result = await withHostOverlay(() => RundotGameAPI.shop.purchase(itemId, idempotencyKey));
-        return result.success === true ? "verified" : "failed";
-    } catch {
-        return "failed";
+        const response = await withHostOverlay(() => RundotGameAPI.shop.purchase(itemId, idempotencyKey));
+        // `success` only reports that the host accepted the request. Replaying
+        // an idempotency key returns the ORIGINAL order verbatim, so an order
+        // still in `pending_payment` also arrives as `success: true` — paying
+        // out on that would grant an unpaid purchase.
+        const status = response?.order?.status;
+        if (response?.success === true && status === FULFILLED_ORDER_STATUS) return { result: "verified" };
+        return { result: "indeterminate", message: `RUN shop returned order status "${status ?? "none"}"` };
+    } catch (error) {
+        return checkoutRejection(error);
     }
+}
+
+/**
+ * A structured host rejection carries `RundotApiError.code`; a transport
+ * failure or timeout does not. Duck-typed rather than `instanceof`, because
+ * that class lives on the package root while this module talks to `/api` —
+ * importing it as a value would pull the root bundle in at runtime.
+ */
+function checkoutRejection(error: unknown): ShopCheckoutResult {
+    const code = (error as { code?: unknown } | null)?.code;
+    const message = error instanceof Error ? error.message : String(error);
+    // "UNKNOWN" is the RPC layer's placeholder for an error envelope that
+    // carried no machine code, so it says nothing and must not be trusted.
+    return typeof code === "string" && code !== "" && code !== "UNKNOWN"
+        ? { result: "rejected", code, message }
+        : { result: "indeterminate", message };
 }
 
 /**

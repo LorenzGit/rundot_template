@@ -3,6 +3,7 @@ import { audioManager } from "../audio/audioManager.ts";
 import { getRunCapabilities } from "../sdk/runSdk.ts";
 import { formatNumber, t } from "../systems/localization.ts";
 import {
+    checkoutDeclineReason,
     productView,
     purchaseProduct,
     reconcilePendingPurchase,
@@ -12,6 +13,14 @@ import {
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
+
+/** ADAPT: localize these alongside the rest of your player-facing copy. */
+const DECLINE_TOASTS: Readonly<Record<"insufficient_funds" | "already_owned" | "rate_limited" | "generic", string>> = {
+    insufficient_funds: "NOT ENOUGH RUN BITS",
+    already_owned: "ALREADY OWNED",
+    rate_limited: "TOO MANY ORDERS — TRY AGAIN SHORTLY",
+    generic: "PURCHASE FAILED",
+};
 
 export default function ShopScreen() {
     useStore(
@@ -71,7 +80,10 @@ export default function ShopScreen() {
             // reconciles on the next shop open or resume.
             store.patch({ toast: "ORDER PENDING — CHECKING AGAIN SOON" });
         } else {
-            store.patch({ toast: "PURCHASE FAILED" });
+            // ADAPT: the host names the common declines, so say what happened —
+            // "PURCHASE FAILED" on an empty wallet reads as a broken shop
+            // rather than something the player can act on.
+            store.patch({ toast: DECLINE_TOASTS[checkoutDeclineReason(outcome.error) ?? "generic"] });
             audioManager.play("error");
         }
     };

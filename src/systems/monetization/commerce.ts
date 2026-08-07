@@ -19,11 +19,17 @@ import {
     readShopPrice,
     recordAnalytics,
     withTimeout,
-    type VerifiedActionResult,
+    type ShopCheckoutResult,
 } from "../../sdk/runSdk.ts";
 import { store } from "../../state/store.ts";
 import { runtimeServices } from "../runtimeServices.ts";
 import { saveSystem } from "../save.ts";
+import {
+    declineReasonForCode,
+    type DeclineReason,
+    verdictForCode,
+    verdictForMessage,
+} from "./checkoutClassification.ts";
 import { PRODUCT_NAMES, type ProductId, products } from "./config.ts";
 import { createMonetizationTelemetry } from "./monetizationTelemetry.ts";
 import { createPurchaseCoordinator, type PurchaseOutcome } from "./purchaseCoordinator.ts";
@@ -68,20 +74,20 @@ async function syncEntitlements(): Promise<void> {
 
 /** Thrown when the checkout facade reports a non-verified result. */
 class CheckoutFacadeError extends Error {
-    readonly result: Exclude<VerifiedActionResult, "verified">;
+    readonly outcome: Exclude<ShopCheckoutResult, { result: "verified" }>;
 
-    constructor(result: Exclude<VerifiedActionResult, "verified">) {
-        super(`RUN checkout reported "${result}"`);
-        this.result = result;
+    constructor(outcome: Exclude<ShopCheckoutResult, { result: "verified" }>) {
+        super(outcome.result === "rejected" ? outcome.message : `RUN checkout reported "${outcome.result}"`);
+        this.outcome = outcome;
     }
 }
 
-const purchaseCoordinator = createPurchaseCoordinator<VerifiedActionResult, ShopOrderHistoryResponse>({
+const purchaseCoordinator = createPurchaseCoordinator<ShopCheckoutResult, ShopOrderHistoryResponse>({
     shop: {
         async purchase(itemId, idempotencyKey) {
-            const result = await purchaseVerifiedShopItem(itemId, idempotencyKey);
-            if (result !== "verified") throw new CheckoutFacadeError(result);
-            return result;
+            const outcome = await purchaseVerifiedShopItem(itemId, idempotencyKey);
+            if (outcome.result !== "verified") throw new CheckoutFacadeError(outcome);
+            return outcome;
         },
         async getOrderHistory() {
             // Order history exists only to reconcile an interrupted checkout,
@@ -137,17 +143,26 @@ const purchaseCoordinator = createPurchaseCoordinator<VerifiedActionResult, Shop
     syncEntitlements,
     classifyError(error) {
         if (error instanceof CheckoutFacadeError) {
-            // "cancelled" is the host's own verdict, and "unavailable" means
-            // the checkout never opened — both are clean, uncharged outcomes.
-            if (error.result === "cancelled") return "cancelled";
-            if (error.result === "unavailable") return "failed";
+            const { outcome } = error;
+            // The checkout never opened — nothing can have been charged.
+            if (outcome.result === "unavailable") return "failed";
+            if (outcome.result === "rejected") {
+                const verdict = verdictForCode(outcome.code);
+                return verdict === "unknown" ? verdictForMessage(outcome.message) : verdict;
+            }
         }
-        // The facade's "failed" merges clean declines with thrown or timed-out
-        // checkouts, so it stays unclassifiable: reconcile against order
-        // history, and preserve the intent when that read also fails.
+        // Anything else — a transport failure, a timeout, or an order that came
+        // back unsettled — could have charged the player. Reconcile against
+        // order history, and preserve the intent when that read also fails.
         return "unknown";
     },
 });
+
+/** Why the last checkout ended, for player-facing copy. Never invents a reason. */
+export function checkoutDeclineReason(error: unknown): DeclineReason | null {
+    if (!(error instanceof CheckoutFacadeError) || error.outcome.result !== "rejected") return null;
+    return declineReasonForCode(error.outcome.code);
+}
 
 export interface ProductView {
     productId: ProductId;
@@ -205,7 +220,7 @@ export async function refreshCommerce(): Promise<void> {
     return refreshInFlight;
 }
 
-export async function purchaseProduct(productId: ProductId): Promise<PurchaseOutcome<VerifiedActionResult> | null> {
+export async function purchaseProduct(productId: ProductId): Promise<PurchaseOutcome<ShopCheckoutResult> | null> {
     const definition = products.get(productId);
     if (!definition || !productView(productId).purchasable) return null;
 
