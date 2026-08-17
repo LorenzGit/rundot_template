@@ -97,6 +97,8 @@ These are unaffected by the allow-list.
 | Event | When | Key payload |
 |---|---|---|
 | `error_occurred` | try/catch, `window.error`, `unhandledrejection` | `type`, `message`, `source`, `line` |
+| `error_occurred` (`type: boot_failure`) | Next successful boot, reporting a PREVIOUS boot that died | `reason`, `elapsed_ms`, `failed_at`, `recovered` |
+| `boot_slow` | Boot succeeded but the cover was up past the slow threshold | `threshold_ms`, `elapsed_ms` |
 | `experiment_exposure` | Immediately after `getExperiment` resolves non-null | `experiment`, `variant`, `group` |
 
 Always fire `error_occurred` for queryable triage **and** `RundotGameAPI.error(...)`
@@ -142,3 +144,47 @@ canonical event alongside it rather than instead of it.
 
 New event names must be shared with the RUN Operators team before they appear in
 platform dashboards.
+
+## Reporting a boot that never ran
+
+A boot can fail so early that there is nothing left to report it with: if the
+module bundle never fetches, never parses, or throws at import time, the
+analytics module does not exist. Every in-JS recovery path — the `boot()`
+catch, host handshake timeouts, asset timeouts — lives inside that bundle and
+never runs. The player sees a loading screen that never ends, and you see
+nothing at all.
+
+The boot watchdog in `index.html` covers that gap. It is a classic script, not
+a module, so it runs even when the module graph is what failed.
+
+**Do not decide failure on elapsed time.** A slow connection and a dead bundle
+look identical to a stopwatch, and firing on the slow one tells a player their
+game is broken while it is still downloading. Use the certain signals first:
+
+| Signal | Meaning | Latency |
+|---|---|---|
+| `error` event on the module `<script>` | the bundle never arrived | immediate (~25ms) |
+| `window.onerror` while the cover is up | it arrived and threw | immediate |
+| backstop timer | neither fired and nothing is moving | last resort |
+
+The backstop must not fire while the boot is merely slow. Three liveness
+signals, because each alone lies:
+
+- `document.readyState` reaches `complete` while lazy chunks are still being
+  imported, so it under-reports.
+- `performance.getEntriesByType('resource')` records only COMPLETED requests, so
+  a chunk in flight for 30s leaves a hole indistinguishable from an idle network.
+- The decisive one is a `MutationObserver` on the boot cover: the game paints
+  progress into it, and any mutation proves the bundle is running.
+
+Any one of the three counts as alive.
+
+Outcomes go to `localStorage`, not to analytics — a boot that failed this badly
+has no transport. The next successful boot reads the record, emits
+`error_occurred` with `type: boot_failure`, and clears it. A boot that was
+merely slow succeeded, so it reports `boot_slow` in-session.
+
+Test all three paths, not just the happy one. Blocking the bundle proves the
+error path; a healthy load proves no false positive; **a slow load is the one
+that catches a wrong design** — delay every JS response by ~25s and confirm the
+cover still shows the normal loading copy and `outcome` stays null.

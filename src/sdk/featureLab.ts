@@ -211,7 +211,11 @@ export async function showRunHostUi(): Promise<RunDemoResult> {
         try {
             // Bounded like every other host call: an unresolved bridge here
             // would keep the native loader covering the game indefinitely.
-            await withTimeout(RundotGameAPI.preloader.setLoaderText("RUN host UI connected"), READ_TIMEOUT_MS, "preloader.text");
+            await withTimeout(
+                RundotGameAPI.preloader.setLoaderText("RUN host UI connected"),
+                READ_TIMEOUT_MS,
+                "preloader.text",
+            );
             await withTimeout(RundotGameAPI.preloader.setLoaderProgress(1), READ_TIMEOUT_MS, "preloader.progress");
         } finally {
             await withTimeout(RundotGameAPI.preloader.hideLoadScreen(), READ_TIMEOUT_MS, "preloader.hide");

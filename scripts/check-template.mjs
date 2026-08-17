@@ -924,8 +924,7 @@ expect(
  * fix is the dependency-free sibling, not a loader — keep both documented.
  */
 expect(
-    verificationGuide.includes("ERR_IMPORT_ATTRIBUTE_MISSING") &&
-        verificationGuide.includes("no game imports"),
+    verificationGuide.includes("ERR_IMPORT_ATTRIBUTE_MISSING") && verificationGuide.includes("no game imports"),
     "verification docs must explain why Node test targets have to be dependency-free",
 );
 expect(
