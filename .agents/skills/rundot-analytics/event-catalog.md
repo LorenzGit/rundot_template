@@ -1,118 +1,130 @@
 # Standard Event Catalog
 
-The recommended baseline taxonomy for a RUN title. Apply these names as-is so data is comparable across games; add game-specific events using the same `snake_case` + ID-payload conventions. New event names must be shared with the RUN Operators team before they appear in dashboards.
+Event names are not free-form. RUN's creator analytics runs four separate
+queries over your events, and three of them filter on a **fixed allow-list of
+event names** held server-side in
+`venus/server/cloud-run/src/services/creatorAnalytics.service.ts`
+(`COMMON_EVENT_GROUPS`). An event whose name is not on that list can only ever
+appear in the fourth query, `top_custom_events_30d` — **which returns at most 25
+rows per game**.
 
-## Session & lifecycle
+So a name is not cosmetic. It decides which query your event lands in, and
+whether it is visible at all once a game has more than 25 event types.
+
+| Query | Contains | Row cap |
+|---|---|---|
+| `core_loop_events_30d` | only the core-loop names below | none observed |
+| `economy_events_30d` | only the economy names below, **plus a value sum** | none observed |
+| `monetization_events_30d` | only the monetization names below, **plus a value sum** | none observed |
+| `top_custom_events_30d` | everything else, busiest first | **25** |
+
+**Use the canonical name whenever the beat matches**, even if your game calls it
+something else internally. A roguelike's "dungeon run" is a `run_started`; a
+match-3's "puzzle" is a `run_started`. Emit your own descriptive event *as well*
+if you want it — but the canonical one is what makes the data queryable.
+
+## Core loop — `core_loop_events_30d`
 
 | Event | When | Key payload |
 |---|---|---|
-| `session_start` | App opened / first playable frame | `first_time_player`, attribution fields |
-| `session_pause` | `lifecycles.onSleep` / `onPause` | `elapsed_sec` |
-| `session_end` | `lifecycles.onQuit` | `elapsed_sec`, `screens_viewed` |
-| `screen_view` | Any screen/menu shown | `screen` |
+| `game_opened` | First playable frame after boot | `first_time_player` |
+| `screen_viewed` | Any screen/menu shown | `screen` |
+| `ftue_started` | First-time flow begins | — |
+| `ftue_completed` | First-time flow finished | `elapsed_sec` |
+| `game_mode_start` | A mode/difficulty is chosen | `mode` |
+| `run_started` | A run/round/puzzle/match begins | `run_id`, `mode` |
+| `run_completed` | That run ends in success | `run_id`, `score`, `time_elapsed_sec` |
+| `run_failed` | That run ends in failure | `run_id`, `reason`, `progress_pct` |
+| `level_started` | A discrete level begins | `level_id`, `level_number` |
+| `level_completed` | That level is cleared | `level_id`, `score`, `time_elapsed_sec` |
+| `level_failed` | That level is lost | `level_id`, `reason`, `progress_pct` |
+| `player_death` | The avatar dies | `cause` |
 
-## Auth funnel (`funnel: 'auth'`, funnelOrder 0)
+The allow-list also carries `class_selected`, `zone_selected`, `floor_reached`
+and `mercenary_hired`, which came from an RPG title. Ignore them unless your game
+genuinely has those beats — an unused name on the list costs nothing.
 
-Only if the game has a gated entry (login, age gate, consent). Dedup once-ever.
+## Economy — `economy_events_30d`
 
-| Step | Name | Meaning |
+This query is empty for a game that emits none of these names, no matter how
+much economy the game actually has.
+
+| Event | When | Key payload |
 |---|---|---|
-| 1 | `auth_prompt_shown` | Entry gate displayed |
-| 2 | `auth_started` | User began sign-in/consent |
-| 3 | `auth_complete` | Passed the gate |
-| 4 | `auth_failed` | Failed/abandoned (payload `reason`) |
+| `currency_earned` | Soft/hard currency granted | `amount`, `currency`, `source` |
+| `currency_spent` | Currency consumed | `amount`, `currency`, `sink` |
+| `reward_claimed` | Any reward taken (daily, quest, chest, ad) | `amount`, `reward_id`, `source` |
+| `shop_purchase` | Bought with **in-game** currency | `item_id`, `cost`, `currency` |
+| `item_equipped` | Loadout change | `item_id` |
+| `item_sold` | Item converted back to currency | `item_id`, `amount` |
 
-## FTUE funnel (`funnel: 'ftue'`, funnelOrder 1)
+**`total_value` on this query sums `amount`, then `cost`, then `gold_gained`,
+in that order.** Omit all three and the row still appears with a value of 0.
 
-The FTUE funnel is the single most important funnel in a new game — it shows exactly where first-time players quit. Instrument it with these three rules:
+## Monetization — `monetization_events_30d`
 
-1. **As granular as possible.** Every discrete beat of the first session is its own step: each tutorial text shown AND dismissed, the first enemy spawning AND dying, the first currency earned, the first button tapped. Do not collapse "the tutorial" into one step — break it into `ftue_tutorial_01_shown`, `ftue_tutorial_01_dismissed`, `ftue_tutorial_02_shown`, … The finer the steps, the more precisely you locate the drop-off.
-2. **Strictly linear.** Steps happen in a fixed order, numbered sequentially with no branches. Step N+1 can only fire after step N.
-3. **Fire once, ever.** Each step fires the first time it happens and never again (`trackFunnelStepOnce`), so reinstalls and replays don't pollute it.
-
-When instrumented correctly the step counts are **monotonically decreasing** — a clean funnel shape. If a later step has more hits than an earlier one, the ordering or dedup is wrong.
-
-Example (adapt names to the game's actual first session — expect 15–40+ steps, not a handful):
-
-| Step | Name | Meaning |
+| Event | When | Key payload |
 |---|---|---|
-| 1 | `ftue_load_complete` | Assets loaded, first playable moment (await attribution here) |
-| 2 | `ftue_tutorial_01_shown` | First tutorial text shown |
-| 3 | `ftue_tutorial_01_dismissed` | First tutorial text dismissed |
-| 4 | `ftue_first_action` | First core interaction (tap/place/move) |
-| 5 | `ftue_tutorial_02_shown` | Second tutorial text shown |
-| 6 | `ftue_tutorial_02_dismissed` | Second tutorial text dismissed |
-| 7 | `ftue_first_enemy_spawned` | First enemy/obstacle appears |
-| 8 | `ftue_first_enemy_defeated` | First enemy defeated |
-| 9 | `ftue_first_reward` | First currency/reward earned |
-| 10 | `ftue_first_round_complete` | First round/wave/level finished |
-| 11 | `ftue_first_end_screen` | First results screen (`result`) |
-| 12 | `ftue_first_win` | First success |
-| … | … | Continue for every beat through the end of onboarding |
+| `store_opened` | Shop/IAP surface opened | `placement` |
+| `offer_shown` | An offer is displayed | `offer_type`, `placement` |
+| `offer_clicked` | Player taps into the offer | `offer_type`, `product_id` |
+| `offer_dismissed` | Player declines it | `offer_type`, `reason` |
+| `iap_purchase_started` | Checkout begins | `product_id`, `cost` |
+| `iap_purchase_complete` | Checkout succeeds | `product_id`, `cost` |
+| `iap_purchase_failed` | Checkout fails | `product_id`, `reason` |
+| `first_purchase` | The player's first ever purchase | `product_id`, `cost` |
+| `premium_purchased` | Subscription / premium tier bought | `tier`, `cost` |
+| `rewarded_ad_offered` | Rewarded ad offered to the player | `placement` |
+| `rewarded_ad_watched` | SDK confirms completion | `placement`, `reward_id` |
+| `rewarded_ad_dismissed` | Player cancels or it fails | `placement`, `reason` |
+| `interstitial_shown` | Interstitial displayed | `placement` |
 
-## Core gameplay
+**`total_value` sums `cost`, then `price_runbucks`, then `priceRunbucks`, then
+`amount`.** Include one on every purchase event or the value column reads 0.
 
-| Event | Key payload |
-|---|---|
-| `level_start` | `level_id`, `level_number` |
-| `level_complete` | `level_id`, `score`, `time_elapsed_sec` |
-| `level_failed` | `level_id`, `reason`, `progress_pct` |
-| `level_abandoned` | `level_id`, `progress_pct` |
-| `first_win` | `level_id` |
-| `milestone_reached` | `milestone`, `value` |
-| `reward_granted` | `amount`, `currency`, `source` |
+`monetization_context` is grouped from the first present of `offer_type`,
+`placement`, `product_id`, `productId`, `offering_id`, `tier` — always send at
+least one, or every row collapses into `unknown`.
 
-## Monetization
+Ad *revenue* is not reportable by the game: `RundotGameAPI.ads.showRewardedAdAsync()`
+resolves to a boolean, so only RUN knows what an impression earned. Send the
+events for funnel visibility, and do not expect `total_value` to reflect ad income.
 
-Cross-reference the `rundot-monetization-iap` and `rundot-monetization-ads` skills for design.
+## Errors, experiments, funnels
 
-| Event | Key payload |
-|---|---|
-| `ad_requested` | `placement`, `type` (`rewarded`/`interstitial`) |
-| `ad_shown` | `placement`, `type` |
-| `ad_reward_granted` | `placement`, `reward_id` |
-| `ad_failed` | `placement`, `reason` |
-| Purchase funnel (`funnel: 'purchase'`, order 2) | steps below |
-| 1 `shop_opened` | `source` |
-| 2 `item_selected` | `item_id`, `price` |
-| 3 `checkout_started` | `item_id` |
-| 4 `purchase_complete` | `item_id`, `price`, `currency` |
-| `purchase_failed` | `item_id`, `reason` |
-
-## Errors & crashes
+These are unaffected by the allow-list.
 
 | Event | When | Key payload |
 |---|---|---|
 | `error_occurred` | try/catch, `window.error`, `unhandledrejection` | `type`, `message`, `source`, `line` |
-
-Always fire `error_occurred` for queryable triage AND `RundotGameAPI.error(...)` for the mobile support log. `installErrorCapture()` wires the global listeners.
-
-## Experiments
-
-| Event | When | Key payload |
-|---|---|---|
 | `experiment_exposure` | Immediately after `getExperiment` resolves non-null | `experiment`, `variant`, `group` |
-| `feature_flag_read` | Optional, when a flag gates meaningful UI | `flag`, `enabled` |
 
-```typescript
-const exp = await RundotGameAPI.getExperiment({ experimentName: 'shop_layout' })
-if (exp) {
-  trackEvent('experiment_exposure', {
-    experiment: exp.name,
-    variant: String(exp.value.variant),
-    group: exp.groupName ?? 'unassigned',
-  })
-}
-```
+Always fire `error_occurred` for queryable triage **and** `RundotGameAPI.error(...)`
+for the mobile support log. `installErrorCapture()` wires the global listeners.
 
-## Attribution enrichment (recommended)
+Funnels go through `trackFunnelStep(step, name, funnel, order)`, a separate
+pipeline that feeds `funnel_steps_30d`. Funnel **step** names are free-form and
+have no allow-list — name them for the beat they represent.
 
-Read landing UTM/campaign params once at startup and merge them into early events (`session_start`, `ftue_load_complete`) so paid vs. organic cohorts are separable:
+### FTUE funnel (`funnel: 'ftue'`, funnelOrder 1)
 
-```typescript
-const params = await RundotGameAPI.attribution.getAttributionParams()
-// merge utm_source / utm_medium / utm_campaign / fbclid / gclid into the payload
-```
+The single most important funnel in a new game. Three rules:
+
+1. **As granular as possible.** Every discrete beat of the first session is its
+   own step — each tutorial text shown AND dismissed, the first enemy spawning
+   AND dying, the first currency earned. Expect 15–40+ steps, not a handful.
+2. **Strictly linear.** Fixed order, numbered sequentially, no branches.
+3. **Fire once, ever** (`trackFunnelStepOnce`), so replays don't pollute it.
+
+Correctly instrumented, step counts decrease monotonically. A later step with
+more hits than an earlier one means the ordering or dedup is wrong.
+
+### Purchase funnel (`funnel: 'purchase'`, funnelOrder 2)
+
+`shop_opened` → `item_selected` → `checkout_started` → `purchase_complete`.
+These are funnel *steps*; the queryable events for the same beats are
+`store_opened` / `offer_clicked` / `iap_purchase_started` / `iap_purchase_complete`
+above. Emit both.
 
 ## Payload conventions
 
@@ -120,3 +132,13 @@ const params = await RundotGameAPI.attribution.getAttributionParams()
 - IDs over names for joins (`level_id`), human names optional alongside.
 - Durations in seconds with a `_sec` suffix; percentages 0–100 with `_pct`.
 - Currency amounts as integers with an explicit `currency` field.
+- Value fields matter: see the `total_value` notes per query above.
+
+## Adding a game-specific event
+
+Use `snake_case` and the same payload conventions. It will land in
+`top_custom_events_30d` and compete for the 25 available rows, so add the
+canonical event alongside it rather than instead of it.
+
+New event names must be shared with the RUN Operators team before they appear in
+platform dashboards.

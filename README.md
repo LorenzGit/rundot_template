@@ -192,6 +192,15 @@ with its own mechanic, audience, camera, interactions, and art direction;
 select only the relevant renderer and platform boundaries; replace the example
 identity and systems; and remove every unused route, module, and dependency.
 
+## Report-integrity and engagement defaults
+
+- Funnels are causal contracts: every step must be mandatory and ordered. Optional screens and mutually exclusive rewarded-ad / purchase paths belong in custom events or separate funnels.
+- Reject product conclusions from any funnel above 105% conversion or with a later step exceeding its predecessor. Repair instrumentation first.
+- A missing event in a top-N export is not proof that code never emits it; compare dedicated queries and source-declared events.
+- Persist once-ever marks in the versioned appStorage save. Production iframe localStorage is not durable player storage.
+- Give players a visible, non-punitive daily return reward using trusted host time; reminders must promise the real reward and re-arm after activity.
+- Submit deterministic leaderboard scores at meaningful milestones with active duration. Ask for a Like once after a positive achievement, never on load or in a loop.
+
 ## Pixi, Three.js, or both
 
 One repository and one `npm run dev` command expose three valid rendering
@@ -419,6 +428,8 @@ replacing the neutral headless model with a derived game's real rules.
   single-player derivative.
 - [`docs/runtime.md`](docs/runtime.md) and
   [`docs/monetization.md`](docs/monetization.md) define the active contracts.
+- [`docs/notifications.md`](docs/notifications.md) separates the five-second
+  local device probe from server-authoritative multiplayer push and inbox QA.
 - [`docs/audio.md`](docs/audio.md) defines the procedural mix,
   feedback map, accessibility posture, and audio QA expectations.
 

@@ -19,7 +19,7 @@
 //
 // Dedup model — the two kinds of funnel behave differently:
 //   - Lifetime funnels (`onceEver`, e.g. 'ftue'): each step fires the first
-//     time it ever happens and never again, persisted in localStorage. Without
+//     time it ever happens and never again, persisted in the host-backed save. Without
 //     this, replays and reinstalls re-fire step 1..N and the funnel reads as
 //     non-monotonic garbage.
 //   - Repeatable funnels (e.g. 'engagement', 'purchase'): the backend counts
@@ -53,8 +53,14 @@ export interface FunnelDefinition {
 export interface AnalyticsConfig {
     /** Record a custom event. Wire this to the game's own SDK wrapper. */
     emitEvent: (name: string, payload: EventProps) => void;
-    /** Record a funnel step. Wire this to the game's own SDK wrapper. */
-    emitFunnelStep: (step: number, name: string, funnel: string, order: number) => void;
+    /**
+     * Record a funnel step. Wire this to the game's own SDK wrapper. May
+     * return whether delivery succeeded; on an `onceEver` funnel the lifetime
+     * mark is only persisted once delivery is confirmed (a void return counts
+     * as delivered), so a transient RPC failure can retry on a later beat
+     * instead of silently losing the step for the player's lifetime.
+     */
+    emitFunnelStep: (step: number, name: string, funnel: string, order: number) => void | boolean | Promise<boolean>;
     /**
      * Funnel declarations: name -> { order, steps, onceEver }. Declare every
      * funnel here — never rename or renumber a step that has shipped, or the
@@ -72,8 +78,11 @@ export interface AnalyticsConfig {
      * name or event name to `false` to suppress it entirely. Absent = enabled.
      */
     enabled?: Record<string, boolean>;
-    /** localStorage key holding the once-ever marks. Must be unique per game. */
+    /** localStorage fallback key for local development. Must be unique per game. */
     marksKey?: string;
+    /** Production-safe once-ever persistence. Back these with appStorage/save state. */
+    readOnceEverMarks?: () => string[];
+    writeOnceEverMarks?: (marks: string[]) => void;
     /** Mirror every emit to console.debug — for local/mock verification. */
     debug?: boolean;
 }
@@ -162,6 +171,15 @@ export function createAnalytics(config: AnalyticsConfig): Analytics {
     }
 
     function readMarks(): Set<string> {
+        if (config.readOnceEverMarks) {
+            if (!marks) marks = new Set();
+            try {
+                for (const mark of config.readOnceEverMarks()) marks.add(mark);
+            } catch {
+                // Keep in-memory marks while save state is unavailable.
+            }
+            return marks;
+        }
         if (marks) return marks;
         try {
             const raw = localStorage.getItem(marksKey);
@@ -173,17 +191,33 @@ export function createAnalytics(config: AnalyticsConfig): Analytics {
         return marks;
     }
 
-    /** Returns true if `mark` was newly recorded, false if it already existed. */
-    function markOnce(mark: string): boolean {
+    /** Returns true if `mark` was newly held in memory, false if it existed. */
+    function holdMark(mark: string): boolean {
         const current = readMarks();
         if (current.has(mark)) return false;
         current.add(mark);
+        return true;
+    }
+
+    function persistMarks(): void {
+        if (config.writeOnceEverMarks) {
+            try {
+                config.writeOnceEverMarks([...readMarks()]);
+            } catch {
+                // In-memory dedupe still protects this session.
+            }
+            return;
+        }
         try {
-            localStorage.setItem(marksKey, JSON.stringify([...current]));
+            localStorage.setItem(marksKey, JSON.stringify([...readMarks()]));
         } catch {
             // quota / private mode: the in-memory set still dedups this session
         }
-        return true;
+    }
+
+    /** Undo a held mark after a failed delivery so a later beat can retry. */
+    function releaseMark(mark: string): void {
+        readMarks().delete(mark);
     }
 
     function isOff(name: string): boolean {
@@ -231,14 +265,23 @@ export function createAnalytics(config: AnalyticsConfig): Analytics {
             const definition = funnels[funnel];
             const name = definition?.steps[step - 1];
             if (!name) return;
-            if (definition.onceEver && !markOnce(`${funnel}:${step}:${name}`)) return;
+            const onceMark = definition.onceEver ? `${funnel}:${step}:${name}` : null;
+            if (onceMark && !holdMark(onceMark)) return;
             log("funnel", funnel, step, name);
             const order = definition.order ?? 0;
             deliver(() => {
                 try {
-                    emitFunnelStep(step, name, funnel, order);
+                    const result = emitFunnelStep(step, name, funnel, order);
+                    if (!onceMark) return;
+                    void Promise.resolve(result)
+                        .then((ok) => {
+                            if (ok === false) releaseMark(onceMark);
+                            else persistMarks();
+                        })
+                        .catch(() => releaseMark(onceMark));
                 } catch {
                     // never let a funnel step break the beat that triggered it
+                    if (onceMark) releaseMark(onceMark);
                 }
             });
             // trackFunnelStep carries no payload, so context rides on a
@@ -297,6 +340,13 @@ export function createAnalytics(config: AnalyticsConfig): Analytics {
 
         resetOnceEver() {
             marks = new Set();
+            if (config.writeOnceEverMarks) {
+                try {
+                    config.writeOnceEverMarks([]);
+                } catch {
+                    // ignore
+                }
+            }
             try {
                 localStorage.removeItem(marksKey);
             } catch {

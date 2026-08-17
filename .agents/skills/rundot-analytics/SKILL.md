@@ -40,7 +40,7 @@ Many RUN templates ship basic analytics. Do NOT duplicate them. Before writing a
 import RundotGameAPI from '@series-inc/rundot-game-sdk/api'
 
 // Structured, queryable telemetry (fire-and-forget — never rejects fatally, but swallow anyway)
-RundotGameAPI.analytics.recordCustomEvent('level_complete', { level: 5, score: 1200 })
+RundotGameAPI.analytics.recordCustomEvent('level_completed', { level_id: 'w1_l5', score: 1200 })
 RundotGameAPI.analytics.trackFunnelStep(2, 'tutorial_movement', 'ftue', 1)
 
 // Debug/support logs — flat STRINGS, NOT queryable fields
@@ -59,16 +59,30 @@ Custom events only surface in dashboards after the RUN Operators team is told th
 
 Every title should be emitting these. Audit for each; add what's missing.
 
+**Names are not free-form.** Three of the four analytics queries filter on a
+fixed server-side allow-list; anything else falls into `top_custom_events_30d`,
+which returns **at most 25 rows per game**. Use the canonical name whenever the
+beat matches, even if the game calls it something else internally — see
+[event-catalog.md](event-catalog.md) for the full list and the payload keys that
+make `total_value` work.
+
 ```
-- [ ] session_start           — once per session (app opened / became playable)
-- [ ] login / auth funnel     — funnel 'auth', if the game has any gated entry
-- [ ] ftue funnel             — funnel 'ftue', granular + linear + once-ever (see FTUE below)
-- [ ] core gameplay actions   — level_start / level_complete / level_failed, key verbs
-- [ ] progression milestones  — first_win, level unlocks, big-number thresholds
-- [ ] monetization events     — ad_shown/ad_reward, purchase funnel + purchase_complete
+- [ ] game_opened             — first playable frame after boot
+- [ ] screen_viewed           — any screen/menu shown (note: _viewed, not _view)
+- [ ] ftue_started/_completed — plus the granular 'ftue' funnel (see FTUE below)
+- [ ] run_started/_completed/_failed     — the core loop, whatever the game calls it
+- [ ] level_started/_completed/_failed   — if the game has discrete levels
+- [ ] currency_earned/_spent  — any soft or hard currency movement
+- [ ] reward_claimed          — daily, quest, chest, ad reward
+- [ ] store_opened, offer_shown/_clicked — the shop surface
+- [ ] iap_purchase_started/_complete/_failed — with a `cost` payload key
+- [ ] rewarded_ad_offered/_watched/_dismissed, interstitial_shown
 - [ ] error_occurred          — try/catch failures + window error + unhandledrejection
 - [ ] experiment_exposure     — every time a variant is read (see Experiments)
 ```
+
+Game-specific events are welcome **alongside** these, never instead of them:
+`dungeon_run_started` and `run_started` can both fire for the same beat.
 
 Full names, payload fields, and funnel step tables are in [event-catalog.md](event-catalog.md). Use it as the source of truth so games stay comparable.
 
@@ -77,6 +91,33 @@ Full names, payload fields, and funnel step tables are in [event-catalog.md](eve
 - Event and funnel names are **stable `snake_case`** (`boss_defeated`, never `Event1` or `bossDefeated`). Renaming later breaks historical queries.
 - Payload keys are `snake_case`. Send IDs, not blobs (`level_id: 'w3_l2'`, not the whole level object).
 - Funnel **step numbers are fixed** once shipped. `funnelOrder` positions a funnel in the overall journey (auth=0, ftue=1, purchase=2…) and must be consistent across all steps of that funnel.
+
+## Verify it actually fires (typecheck proves nothing)
+
+**In local mock mode `recordCustomEvent` is a no-op.** The SDK's
+`MockAnalyticsApi` awaits a short delay and returns — no network request, no
+`postMessage`, nothing in devtools. A game can compile, build, pass every test
+and emit not one event, and nothing in the normal workflow will tell you.
+
+So verify at runtime. [verify-events.mjs](verify-events.mjs) drives the game in
+headless Chromium and rewrites the SDK module **as it is served**, replacing the
+mock no-ops with versions that record to a global. Nothing on disk changes.
+
+```bash
+node .agents/skills/rundot-analytics/verify-events.mjs . 5330
+# -> {"game":"my-game","sdkChunksPatched":2,"totalEvents":23,
+#     "events":{"game_opened":1,"run_started":2,"level_completed":1,...}}
+```
+
+Two things it taught the fleet, worth knowing before you trust a run:
+
+- **`sdkChunksPatched: 0` means the probe failed, not that the game is silent.**
+  Games that let Vite pre-bundle the SDK get reformatted whitespace, so the
+  patch must be regex-based. Zero patched chunks and zero events look identical
+  to a game emitting nothing.
+- **Ads, purchases and economy events cannot fire locally.** They need real host
+  inventory or a purchase flow. Confirm those from the dashboard's Event Catalog
+  "last fired" column after deploy, not from a local run.
 
 ## Instrumentation patterns
 
@@ -183,11 +224,54 @@ When asked to review a game's analytics:
 - [ ] Report findings; apply fixes reusing the existing wrapper
 ```
 
+## Renaming events safely (the traps)
+
+Migrating a game onto the canonical names is mostly mechanical, but a
+find-and-replace over quoted strings will damage four things that *look* like
+event names and are not:
+
+- **Funnel step names are not events.** They travel through `trackFunnelStep`,
+  a separate pipeline with **no allow-list**, so canonicalising them buys
+  nothing and discards the shipped funnel's history. Step names are frozen once
+  deployed — leave them, and emit the canonical event alongside.
+- **Internal event-bus discriminants.** A `{ type: "run_end" }` sim event that
+  the renderer consumes shares the string namespace visually and nothing else.
+  Renaming it to `run_completed` typechecks fine and is silently wrong — worse
+  when the beat is a defeat, or fires many times per run (a wave, not a run).
+- **Comments and docs.** A backtick-quoted name inside a comment will be
+  rewritten too, turning "step 1 is UNCHANGED from what shipped: `game_loaded`"
+  into a false claim.
+- **Interstitial vs rewarded outcomes.** `shown ? 'shown' : 'not_shown'` on an
+  interstitial is not a rewarded-ad completion. Only split an outcome event when
+  the expression actually tests completion.
+
+Splitting an outcome event into its canonical pair is the one transform worth
+doing by hand:
+
+```typescript
+// before: one event carrying the verdict in its payload
+telemetry.record('checkout_result', { product_id, result: outcome.status })
+
+// after: the canonical pair, which monetization_events_30d can filter
+telemetry.record(
+  outcome.status === 'confirmed' ? 'iap_purchase_complete' : 'iap_purchase_failed',
+  { product_id, cost, status: outcome.status },
+)
+```
+
+**Keep names greppable.** A name assembled at runtime
+(`` `level_${n}_completed` ``) cannot be found by any static audit, so it will
+never appear in coverage tooling. A lookup table (`const EVENTS = { started:
+'level_started' }`) is fine — that convention is understood — but an inline
+literal is better.
+
 ## Anti-patterns
 
 - ❌ Reading funnel_steps_30d without checking whether a recent fix has had time to accumulate new sessions — old exports describe the old build.
 - ❌ Putting queryable data only in `log()` strings — it can't be aggregated. Use `recordCustomEvent`.
 - ❌ Renaming/renumbering events or funnel steps after launch — breaks trend data.
+- ❌ Trusting typecheck/build as proof that analytics work — mock `recordCustomEvent` is a no-op; verify at runtime.
+- ❌ Bulk find-and-replace over event names — it also hits funnel steps, sim-event discriminants and comments.
 - ❌ Firing FTUE/login funnel steps on every play — inflates the funnel; dedup once-ever.
 - ❌ Collapsing the FTUE into a few coarse steps — you lose the ability to see *which* beat loses players. Instrument every beat.
 - ❌ Awaiting analytics in the game loop or `.catch()`-ing manually everywhere — use the swallowing wrapper.
@@ -197,5 +281,6 @@ When asked to review a game's analytics:
 ## Resources
 
 - [event-catalog.md](event-catalog.md) — standard event names, payloads, and funnel step tables.
+- [verify-events.mjs](verify-events.mjs) — headless runtime probe; proves events actually fire.
 - [analytics.ts](analytics.ts) — drop-in wrapper (`trackEvent`, `trackFunnel`, `trackFunnelStepOnce`, `trackError`, `installErrorCapture`).
 - `rundot-marketing-social` — once instrumented, always run `rundot socials prepare` to drive free sessions and populate the funnels you're measuring.

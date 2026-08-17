@@ -8,6 +8,7 @@ import {
     getRunCapabilities,
     initSdk,
     readAttribution,
+    refreshRunCapabilities,
     registerLifecycles,
     requestHostExit,
 } from "./sdk/runSdk.ts";
@@ -145,6 +146,9 @@ async function boot() {
         },
         onAwake: () => {
             setHostPaused("host_sleep", false);
+            // onAwake is the SDK's "refresh stale data" hook; a long suspend
+            // can span a settings change or a delayed host attach.
+            refreshRunCapabilities();
         },
         onQuit: () => {
             void saveSystem.flush();

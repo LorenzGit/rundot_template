@@ -15,6 +15,16 @@ SettingsMusicVolume,MUSIC VOLUME,VOLUME DA MÚSICA,VOLUMEN DE MÚSICA
 SettingsSfxVolume,SFX VOLUME,VOLUME DOS EFEITOS,VOLUMEN DE EFECTOS
 SettingsHaptics,HAPTICS,VIBRAÇÃO,VIBRACIÓN
 SettingsNotifications,NOTIFICATIONS,NOTIFICAÇÕES,NOTIFICACIONES
+SettingsTestAlerts,ALERT TEST,TESTE DE ALERTA,PRUEBA DE ALERTA
+SettingsTestTitle,Try a phone alert in 5 seconds.,Teste um alerta no telefone em 5 segundos.,Prueba una alerta en el teléfono en 5 segundos.
+SettingsTestCopy,This checks local notification permission and scheduling on this device.,Isso verifica a permissão e o agendamento de notificações locais neste aparelho.,Esto verifica el permiso y la programación de notificaciones locales en este dispositivo.
+SettingsTestDisclaimer,Tap the test and close RUN immediately. This does not test multiplayer push or inbox delivery.,Toque no teste e feche a RUN imediatamente. Isso não testa push multijogador nem a caixa de entrada.,Toca la prueba y cierra RUN inmediatamente. Esto no prueba el push multijugador ni el buzón.
+SettingsTestPhone,ALERT · 5 SEC,ALERTA · 5 S,ALERTA · 5 S
+NotificationTestScheduling,SCHEDULING…,AGENDANDO…,PROGRAMANDO…
+NotificationTestStarting,CONTACTING RUN…,CONECTANDO À RUN…,CONECTANDO CON RUN…
+NotificationTestScheduled,SCHEDULED · CLOSE RUN NOW,AGENDADO · FECHE A RUN,PROGRAMADO · CIERRA RUN
+NotificationTestUnavailable,AVAILABLE INSIDE THE RUN APP,DISPONÍVEL NO APP RUN,DISPONIBLE EN LA APP RUN
+NotificationTestFailed,NO ALERT SCHEDULED · CHECK PERMISSION,NENHUM ALERTA AGENDADO · VERIFIQUE A PERMISSÃO,NO SE PROGRAMÓ LA ALERTA · REVISA EL PERMISO
 SettingsReducedMotion,REDUCED MOTION,MOVIMENTO REDUZIDO,MOVIMIENTO REDUCIDO
 SettingsQuality,QUALITY,QUALIDADE,CALIDAD
 SettingsHigh,HIGH,ALTA,ALTA

@@ -19,7 +19,10 @@ type RendererPreference = "webgpu" | "webgl";
 let webGpuProvenBroken = false;
 
 function rendererBackend(app: Application): RendererPreference {
-    return app.renderer.constructor.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
+    // Never detect via constructor.name: minification renames the class, which
+    // made prod builds misread WebGPU as WebGL and tear it down every session.
+    // Pixi's renderer.name is the literal backend string on both backends.
+    return app.renderer.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
 }
 
 async function initializeRenderer(

@@ -8,6 +8,7 @@
  */
 import { store, useStore } from "../state/store.ts";
 import { saveSystem } from "../systems/save.ts";
+import { abandonDemoLevel } from "../systems/demoAnalytics.ts";
 import { resumeFromHostPause } from "../systems/hostPause.ts";
 import { formatNumber } from "../systems/localization.ts";
 
@@ -26,6 +27,10 @@ export default function Hud() {
                     type="button"
                     className="hud-menu pointer-events-auto"
                     onClick={() => {
+                        // Close the level-analytics record like the host back
+                        // button does — MENU is the only exit on iOS hosts, and
+                        // skipping it left runs "open" until the next play.
+                        abandonDemoLevel("menu_exit");
                         store.patch({ phase: "menu", menuScreen: "main" });
                         void saveSystem.flush();
                     }}

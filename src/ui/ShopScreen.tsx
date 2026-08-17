@@ -10,6 +10,7 @@ import {
     refreshCommerce,
     validateCatalogInDevelopment,
 } from "../systems/monetization/commerce.ts";
+import { analytics } from "../systems/analytics/analyticsConfig.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
 import MenuScreenLayout from "./MenuScreenLayout.tsx";
@@ -32,6 +33,9 @@ export default function ShopScreen() {
 
     useEffect(() => {
         let disposed = false;
+        // Step 1 of the declared purchase funnel — the conversion arc starts
+        // the moment the shop actually paints, not at checkout.
+        analytics.funnelStep("purchase", 1);
         // An interrupted checkout reconciles before the player can tap the
         // card again; ownership and live prices refresh on every shop open.
         void (async () => {
@@ -65,11 +69,17 @@ export default function ShopScreen() {
     const buy = async () => {
         await audioManager.unlock();
         setBusy(true);
+        // Steps 2 and 3 are adjacent in this one-card demo shop. ADAPT: in a
+        // real catalog, fire item_selected when a product is focused/opened and
+        // checkout_started only when the host sheet is actually requested.
+        analytics.funnelStep("purchase", 2, { product_id: bundle.productId });
+        analytics.funnelStep("purchase", 3, { product_id: bundle.productId });
         const outcome = await purchaseProduct(bundle.productId);
         setBusy(false);
         if (!outcome) {
             store.patch({ toast: "PURCHASE NOT STARTED" });
         } else if (outcome.status === "confirmed") {
+            analytics.funnelStep("purchase", 4, { product_id: bundle.productId });
             store.patch({ toast: `${bundle.name} OWNED` });
             audioManager.play("reward");
             void runtimeServices.haptic("success");

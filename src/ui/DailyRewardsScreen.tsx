@@ -32,7 +32,12 @@ export default function DailyRewardsScreen() {
             <p className="authority-label">{view.label}</p>
             <div className="reward-track">
                 {REWARDS.map((coins, index) => (
-                    <div className={`reward-day ${view.streak === index + 1 ? "current" : ""}`} key={coins}>
+                    // Streaks wrap past the 7-day track (day 8 pays day 1's
+                    // reward), so the highlight must wrap with them.
+                    <div
+                        className={`reward-day ${view.streak > 0 && (view.streak - 1) % REWARDS.length === index ? "current" : ""}`}
+                        key={coins}
+                    >
                         <span>DAY {formatNumber(index + 1)}</span>
                         <strong>{formatNumber(coins)}</strong>
                         <small>COINS</small>

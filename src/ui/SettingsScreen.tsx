@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { audioManager } from "../audio/audioManager.ts";
-import { setNotificationPreference } from "../sdk/runSdk.ts";
+import {
+    requestNotificationSelfTest,
+    setNotificationPreference,
+    type NotificationSelfTestResult,
+} from "../sdk/runSdk.ts";
 import { LOCALES, selectLocale, t } from "../systems/localization.ts";
+import { returnReminders } from "../systems/retention/retentionConfig.ts";
 import { saveSystem } from "../systems/save.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore, type AppState } from "../state/store.ts";
@@ -24,13 +29,32 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
 export default function SettingsScreen() {
     const state = useStore((value) => value);
     const [notificationBusy, setNotificationBusy] = useState(false);
+    const [notificationTestBusy, setNotificationTestBusy] = useState(false);
+    const [notificationTestStatus, setNotificationTestStatus] = useState<string | null>(null);
 
     const notificationToggle = async (enabled: boolean) => {
         setNotificationBusy(true);
-        const result = await setNotificationPreference(enabled);
+        if (!enabled) {
+            // Opt out of THIS game only, and drop what is already scheduled.
+            // Turning the host preference off here would revoke the RUN app's
+            // permission, which every other game shares — one player switching
+            // our reminders off would silence all of them.
+            persist({ notificationsOptOut: true, notificationsEnabled: false });
+            await returnReminders.cancelAll();
+            setNotificationBusy(false);
+            return;
+        }
+        // Already granted app-wide: nothing to ask, just stop opting out.
+        if (state.notificationsConsent === "granted") {
+            persist({ notificationsOptOut: false, notificationsEnabled: true });
+            runtimeServices.rearmNotifications();
+            setNotificationBusy(false);
+            return;
+        }
+        const result = await setNotificationPreference(true);
         setNotificationBusy(false);
         if (result === "enabled") {
-            persist({ notificationsEnabled: true, notificationsConsent: "granted" });
+            persist({ notificationsOptOut: false, notificationsEnabled: true, notificationsConsent: "granted" });
             runtimeServices.rearmNotifications();
         } else if (result === "disabled") persist({ notificationsEnabled: false, notificationsConsent: "denied" });
         else {
@@ -45,6 +69,39 @@ export default function SettingsScreen() {
         audioManager.play("reward");
         const sent = await runtimeServices.haptic("success");
         store.patch({ toast: sent ? "HAPTIC SENT" : "HAPTICS NEED A SUPPORTED DEVICE" });
+    };
+
+    const testNotifications = async () => {
+        setNotificationTestBusy(true);
+        setNotificationTestStatus("NotificationTestStarting");
+        audioManager.play("tap");
+        void runtimeServices.haptic("light");
+
+        if (!state.notificationsEnabled || state.notificationsConsent !== "granted") {
+            const preference = await setNotificationPreference(true);
+            if (preference !== "enabled") {
+                setNotificationTestStatus(
+                    preference === "unavailable" ? "NotificationTestUnavailable" : "NotificationTestFailed",
+                );
+                setNotificationTestBusy(false);
+                audioManager.play("error");
+                void runtimeServices.haptic("error");
+                return;
+            }
+            persist({ notificationsOptOut: false, notificationsEnabled: true, notificationsConsent: "granted" });
+            runtimeServices.rearmNotifications();
+        }
+
+        const result: NotificationSelfTestResult = await requestNotificationSelfTest();
+        const statusKey: Record<NotificationSelfTestResult, string> = {
+            scheduled: "NotificationTestScheduled",
+            unavailable: "NotificationTestUnavailable",
+            failed: "NotificationTestFailed",
+        };
+        setNotificationTestStatus(statusKey[result]);
+        setNotificationTestBusy(false);
+        audioManager.play(result === "scheduled" ? "reward" : "error");
+        void runtimeServices.haptic(result === "scheduled" ? "success" : "error");
     };
 
     return (
@@ -82,7 +139,10 @@ export default function SettingsScreen() {
                         onChange={(event) => persist({ sfxVolume: Number(event.target.value) })}
                     />
                 </label>
-                <div className="setting-row">
+                {/* A <label> like the other rows: the bare checkbox alone is a
+                    26px target, far under the 44px floor — the row text must
+                    toggle it. Clicks on the nested TEST button stay its own. */}
+                <label className="setting-row">
                     <span>{t("SettingsHaptics")}</span>
                     <div className="setting-actions">
                         <input
@@ -95,7 +155,7 @@ export default function SettingsScreen() {
                             TEST
                         </button>
                     </div>
-                </div>
+                </label>
                 <Toggle
                     label={t("SettingsReducedMotion")}
                     checked={state.reducedMotion}
@@ -150,6 +210,18 @@ export default function SettingsScreen() {
                     </div>
                 </div>
             </div>
+            <section className="notification-self-test" aria-labelledby="notification-self-test-heading">
+                <p className="eyebrow">{t("SettingsTestAlerts")}</p>
+                <h3 id="notification-self-test-heading">{t("SettingsTestTitle")}</h3>
+                <p>{t("SettingsTestCopy")}</p>
+                <p className="notification-self-test-disclaimer">{t("SettingsTestDisclaimer")}</p>
+                <button type="button" disabled={notificationTestBusy} onClick={() => void testNotifications()}>
+                    {notificationTestBusy ? t("NotificationTestScheduling") : t("SettingsTestPhone")}
+                </button>
+                <p className="notification-self-test-status" role="status">
+                    {notificationTestStatus ? t(notificationTestStatus) : "\u00a0"}
+                </p>
+            </section>
             <p className="safety-note">
                 Notification consent changes only after the RUN host confirms the requested state.
             </p>

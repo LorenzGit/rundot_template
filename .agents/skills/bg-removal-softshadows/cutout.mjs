@@ -18,24 +18,38 @@
 /*   node cutout.mjs in.png -o out.png [options]                       */
 /*                                                                     */
 /* Options:                                                            */
-/*   --mode wand|chroma        (default wand)                          */
+/*   --mode wand|chroma|chroma-decontam   (default wand)               */
 /*   --seed x,y[,tol]          repeat; wand: defaults to 4 corners;    */
 /*                             chroma: optional, falls back to --key   */
 /*   --key 00ff00              chroma key color when no seeds given    */
 /*   --tolerance 20            max per-channel difference              */
+/*   --contiguous on|off       wand only: flood (on, default) or       */
+/*                             global color match (off)                */
 /*   --contract 1              selection contraction px (neg = expand) */
 /*   --smooth 2                contour rounding px                     */
-/*   --feather 1               edge blur px                            */
+/*   --feather 1               edge blur px (wand/chroma) or alpha     */
+/*                             feather for chroma-decontam (default 0.5)*/
 /*   --shadow on|off           shadow recovery layer (default on)      */
 /*   --shadow-strength 100     shadow opacity scale %                  */
 /*   --despill 100             chroma decontamination strength %       */
 /*   --despill-reach 3         despill fade distance inside cut px     */
 /*   --despill-tone 100        100=luma-preserving, 0=black, 200=white */
+/*   chroma-decontam only:                                             */
+/*   --screen-mode auto-border|fixed                                   */
+/*   --metric green-excess|ycbcr|rgb                                   */
+/*   --decontam-low 0.12       screen fully transparent below score    */
+/*   --decontam-high 0.42      FG fully opaque above score             */
+/*   --spill-amount 0.2        0=hard despill, 1=none                  */
+/*   --reconstruct on|off      F=(C-(1-a)G)/a edge recovery (default on)*/
+/*   --pure-key-pull 0.35      blend auto G toward --key               */
+/*   --premultiply on|off                                              */
 /*                                                                     */
 /* Output: RGBA PNG + one JSON stats line on stdout.                   */
 /* ------------------------------------------------------------------ */
 import { readFileSync, writeFileSync } from "node:fs";
 import { inflateSync, deflateSync } from "node:zlib";
+import { dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 /* ----------------------------- PNG I/O ---------------------------- */
 
@@ -222,6 +236,29 @@ export function floodSelect(d, w, h, sx, sy, tolerance, sel) {
     }
 }
 
+/** Non-contiguous wand: every pixel matching the seed color (global). */
+export function globalColorSelect(d, w, h, sx, sy, tolerance, sel) {
+    const i0 = (sy * w + sx) * 4;
+    const sr = d[i0],
+        sg = d[i0 + 1],
+        sb = d[i0 + 2];
+    const tol = Math.max(0, tolerance);
+    const soft = Math.max(1, tol);
+    const n = w * h;
+    for (let p = 0, i = 0; p < n; p++, i += 4) {
+        const diff = chanDiff(d, i, sr, sg, sb);
+        if (diff <= tol) {
+            sel[p] = 255;
+        } else {
+            const frac = 1 - (diff - tol) / soft;
+            if (frac > 0) {
+                const v = Math.round(255 * frac);
+                if (v > sel[p]) sel[p] = v;
+            }
+        }
+    }
+}
+
 export function erodeSel(sel, w, h, r) {
     const tmp = new Uint8ClampedArray(sel.length);
     for (let y = 0; y < h; y++)
@@ -346,16 +383,25 @@ const transparentPct = (data, totalPx) => {
 /* ------------------ recipes (wand.js / chroma.js) ------------------- */
 
 export function wandCutout(img, seeds, opts) {
-    const { tolerance = 20, contract = 1, smooth = 2, feather = 1, shadow = true, shadowStrength = 100 } = opts;
+    const {
+        tolerance = 20,
+        contract = 1,
+        smooth = 2,
+        feather = 1,
+        shadow = true,
+        shadowStrength = 100,
+        contiguous = true,
+    } = opts;
     const { w, h, data: d } = img;
     const sel = new Uint8ClampedArray(w * h);
     const bgColors = [];
+    const selectFn = contiguous !== false ? floodSelect : globalColorSelect;
     for (const s of seeds) {
         const x = Math.min(w - 1, Math.max(0, Math.round(s.x)));
         const y = Math.min(h - 1, Math.max(0, Math.round(s.y)));
         const i = (y * w + x) * 4;
         bgColors.push([d[i], d[i + 1], d[i + 2]]);
-        floodSelect(d, w, h, x, y, s.tolerance ?? tolerance, sel);
+        selectFn(d, w, h, x, y, s.tolerance ?? tolerance, sel);
     }
     if (contract) contractSel(sel, w, h, contract);
     if (smooth > 0) smoothSel(sel, w, h, smooth);
@@ -564,7 +610,21 @@ export function chromaCutout(img, seeds, opts) {
 /* ------------------------------ CLI --------------------------------- */
 
 function parseArgs(argv) {
-    const args = { seeds: [], mode: "wand", out: null, input: null };
+    const args = {
+        seeds: [],
+        mode: "wand",
+        out: null,
+        input: null,
+        contiguous: true,
+        screenMode: "auto-border",
+        metric: "green-excess",
+        decontamLow: 0.12,
+        decontamHigh: 0.42,
+        spillAmount: 0.2,
+        reconstruct: true,
+        pureKeyPull: 0.35,
+        premultiply: false,
+    };
     for (let i = 0; i < argv.length; i++) {
         const a = argv[i];
         const next = () => argv[++i];
@@ -576,6 +636,7 @@ function parseArgs(argv) {
             args.seeds.push({ x, y, tolerance: Number.isFinite(tol) ? tol : undefined });
         } else if (a === "--key") args.key = next();
         else if (a === "--tolerance") args.tolerance = Number(next());
+        else if (a === "--contiguous") args.contiguous = next() !== "off";
         else if (a === "--contract") args.contract = Number(next());
         else if (a === "--smooth") args.smooth = Number(next());
         else if (a === "--feather") args.feather = Number(next());
@@ -584,22 +645,51 @@ function parseArgs(argv) {
         else if (a === "--despill") args.despill = Number(next());
         else if (a === "--despill-reach") args.despillReach = Number(next());
         else if (a === "--despill-tone") args.despillTone = Number(next());
+        else if (a === "--screen-mode") args.screenMode = next();
+        else if (a === "--metric") args.metric = next();
+        else if (a === "--decontam-low") args.decontamLow = Number(next());
+        else if (a === "--decontam-high") args.decontamHigh = Number(next());
+        else if (a === "--spill-amount") args.spillAmount = Number(next());
+        else if (a === "--reconstruct") args.reconstruct = next() !== "off";
+        else if (a === "--pure-key-pull") args.pureKeyPull = Number(next());
+        else if (a === "--premultiply") args.premultiply = next() !== "off";
         else if (!a.startsWith("-") && !args.input) args.input = a;
         else throw new Error(`unknown argument: ${a}`);
     }
     return args;
 }
 
-function main() {
+async function main() {
     const args = parseArgs(process.argv.slice(2));
     if (!args.input || !args.out) {
-        console.error("usage: node cutout.mjs in.png -o out.png [--mode wand|chroma] [--seed x,y[,tol]] ...");
+        console.error(
+            "usage: node cutout.mjs in.png -o out.png [--mode wand|chroma|chroma-decontam] [--seed x,y[,tol]] ...",
+        );
         process.exit(2);
     }
     const img = decodePng(readFileSync(args.input));
 
     let result;
-    if (args.mode === "chroma") {
+    if (args.mode === "chroma-decontam" || args.mode === "chroma_decontam") {
+        const { chromaDecontamCutout } = await import(
+            pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), "chroma_decontam.mjs")).href
+        );
+        if (!args.key) args.key = "00ff00";
+        // default feather for decontam if not set
+        if (args.feather === undefined) args.feather = 0.5;
+        result = chromaDecontamCutout(img, {
+            key: args.key,
+            screenMode: args.screenMode,
+            metric: args.metric,
+            low: args.decontamLow,
+            high: args.decontamHigh,
+            feather: args.feather,
+            reconstruct: args.reconstruct,
+            spillAmount: args.spillAmount,
+            pureKeyPull: args.pureKeyPull,
+            premultiply: args.premultiply,
+        });
+    } else if (args.mode === "chroma") {
         if (!args.seeds.length && !args.key) args.key = "00ff00";
         result = chromaCutout(img, args.seeds, args);
     } else {
@@ -624,10 +714,16 @@ function main() {
             w: result.w,
             h: result.h,
             transparentPct: result.transparentPct,
+            screen: result.screen || undefined,
             out: args.out,
         }),
     );
 }
 
 const isMain = process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop());
-if (isMain) main();
+if (isMain) {
+    main().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+}

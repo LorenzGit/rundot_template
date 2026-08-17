@@ -1,6 +1,6 @@
 {
   "name": "rundot_template",
-  "version": "0.10.7",
+  "version": "0.10.8",
   "description": "Production-minded RUN.world reference with PixiJS, Three.js, and hybrid WebGPU-first patterns.",
   "private": true,
   "license": "SEE LICENSE IN LICENSE.md",
@@ -16,6 +16,7 @@
     "protobufjs": false
   },
   "scripts": {
+    "version:check": "node scripts/check-deployed-version.mjs",
     "dev": "vite",
     "dev:playground": "cross-env RUNDOT_PLAYGROUND=1 vite",
     "dev:multiplayer": "cross-env RUNDOT_MULTIPLAYER=1 vite",
@@ -23,8 +24,8 @@
     "format": "biome format --write .",
     "format:check": "biome format .",
     "lint": "biome lint src additional_features e2e scripts playwright.config.ts vite.config.js --diagnostic-level=error --max-diagnostics=none",
-    "typecheck": "tsc --noEmit && tsc --project tsconfig.additional-features.json --noEmit",
-    "test": "node scripts/check-template.mjs && node --experimental-strip-types scripts/test-checkout-classification.ts && node --experimental-strip-types scripts/test-purchase-coordinator.ts && node --experimental-strip-types scripts/test-return-reminders.ts && node scripts/check-player-number-formatting.mjs && node --experimental-strip-types scripts/check-safe-area.ts && node scripts/test-noise-random.mjs && node scripts/simulate-demo.mjs",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.additional-features.json --noEmit && tsc --project tsconfig.e2e.json --noEmit",
+    "test": "node scripts/check-template.mjs && node --experimental-strip-types scripts/test-checkout-classification.ts && node --experimental-strip-types scripts/test-purchase-coordinator.ts && node --experimental-strip-types scripts/test-return-reminders.ts && node --experimental-strip-types scripts/test-notification-self-test.ts && node scripts/check-player-number-formatting.mjs && node --experimental-strip-types scripts/check-safe-area.ts && node scripts/test-noise-random.mjs && node scripts/simulate-demo.mjs",
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "qa:visual": "node scripts/visual-qa.mjs",

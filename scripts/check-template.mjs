@@ -106,9 +106,19 @@ const multiplayerCapabilities = read(".agents/skills/rundot-multiplayer/referenc
 const developmentPreview = read("src/dev/preview.ts");
 const developmentTools = read("src/dev/DevelopmentTools.tsx");
 const verificationGuide = read("docs/verification.md");
+const notificationsGuide = read("docs/notifications.md");
 const deterministicSimulationGuide = read("docs/deterministic-simulation.md");
 const randomnessGuide = read("docs/randomness.md");
 const analyticsGuide = read("docs/analytics.md");
+const analyticsOpsSkill = read(".agents/skills/rundot-analytics-ops/SKILL.md");
+const notificationSkill = read(".agents/skills/rundot-feature-notifications/SKILL.md");
+const notificationSkillSystem = read(
+    ".agents/skills/rundot-feature-notifications/systems/notifications/notifications.ts",
+);
+const notificationSkillNotes = read(".agents/skills/rundot-feature-notifications/references/run-sdk-notes.md");
+const analyticsDashboardContract = read(
+    ".agents/skills/rundot-analytics-ops/references/release-progression-dashboard.md",
+);
 const visualAssetsGuide = read("docs/visual-assets.md");
 const simulation = read("scripts/simulate-demo.mjs");
 const noiseRandom = read("src/game/noiseRandom.ts");
@@ -126,8 +136,25 @@ const browserQa = read("src/qa/browserContract.ts");
 const localization = read("src/systems/localization.ts");
 const numberFormattingGuide = read("docs/number-formatting.md");
 const numberFormattingAudit = read("scripts/check-player-number-formatting.mjs");
+const notificationSelfTest = read("src/systems/notificationSelfTest.ts");
+const settingsScreen = read("src/ui/SettingsScreen.tsx");
 
 expect(/^\d+\.\d+\.\d+$/.test(packageJson.version), "package version must be semver");
+// One version rule: package.json is what the menu renders and what analytics tags builds
+// with, so a published game must keep it equal to the version RUN serves. Comparing them
+// needs the network; these guard the rule and its tooling from quietly disappearing.
+expect(
+    packageJson.scripts?.["version:check"] === "node scripts/check-deployed-version.mjs",
+    "version:check script must stay wired so the deployed version can be verified",
+);
+expect(
+    fs.existsSync(path.join(root, "scripts/check-deployed-version.mjs")),
+    "scripts/check-deployed-version.mjs must exist",
+);
+expect(
+    /^## One version$/m.test(localAgents) && localAgents.includes("Public tag"),
+    "AGENTS.md must document the one-version rule",
+);
 expect(packageJson.name === "rundot_template", "package name must match the repository identity");
 expect(lock.version === packageJson.version, "package-lock root version must match package.json");
 expect(lock.packages?.[""]?.version === packageJson.version, "package-lock package version must match package.json");
@@ -200,8 +227,18 @@ expect(
     analyticsGuide.includes("## Measurement plan") &&
         analyticsGuide.includes("duration_seconds") &&
         analyticsGuide.includes("level_completed") &&
-        analyticsGuide.includes("Paid-acquisition analysis"),
-    "analytics guide must define measurement, level timing, and attribution boundaries",
+        analyticsGuide.includes("Paid-acquisition analysis") &&
+        analyticsGuide.includes("## Dashboard and export contract") &&
+        analyticsGuide.includes("top-N sample"),
+    "analytics guide must define measurement, timing, attribution, and dashboard boundaries",
+);
+expect(
+    analyticsOpsSkill.includes("references/release-progression-dashboard.md") &&
+        analyticsDashboardContract.includes("Append observations") &&
+        analyticsDashboardContract.includes("build_version") &&
+        analyticsDashboardContract.includes("Interactive refresh") &&
+        analyticsDashboardContract.includes("dimensional custom-event aggregate"),
+    "analytics operations skill must preserve the release and progression dashboard contract",
 );
 expect(
     levelAnalytics.includes("createLevelAnalytics") &&
@@ -250,6 +287,25 @@ expect(
     "source must use the shared number formatter instead of one-off toLocaleString calls",
 );
 expect(
+    notificationSelfTest.includes("NOTIFICATION_SELF_TEST_DELAY_SECONDS = 5") &&
+        notificationSelfTest.includes('channels: ["local"]') &&
+        notificationSelfTest.includes("await port.cancel(message.notificationId)") &&
+        settingsScreen.includes("requestNotificationSelfTest"),
+    "settings must retain the cancel-first five-second local notification probe",
+);
+expect(
+    notificationsGuide.includes("local alerts and multiplayer alerts as separate systems") &&
+        notificationsGuide.includes("broker call before the room handler returns") &&
+        notificationsGuide.includes("two independent identities"),
+    "notification docs must preserve the local-vs-remote verification contract",
+);
+expect(
+    notificationSkill.includes("SDK 5.24 initializes on import") &&
+        notificationSkillSystem.includes("submitMessageAsync") &&
+        notificationSkillNotes.includes("Local delivery does not prove multiplayer push or inbox"),
+    "notification skill must retain the current SDK and local-vs-remote guidance",
+);
+expect(
     monetizationGuide.includes("## What counts as Run Bits monetization") &&
         monetizationGuide.includes("rundot/shop.config.json") &&
         monetizationGuide.includes('"price": { "type": "bucks", "value": "100" }') &&
@@ -291,6 +347,11 @@ for (const required of [
     ".agents/skills/rundot-multiplayer/references/source-map.md",
     ".agents/skills/rundot-multiplayer/references/syncplay.md",
     ".agents/skills/rundot-multiplayer/references/testing-and-operations.md",
+    ".agents/skills/rundot-feature-notifications/SKILL.md",
+    ".agents/skills/rundot-feature-notifications/references/run-sdk-notes.md",
+    ".agents/skills/rundot-feature-notifications/systems/notifications/README.md",
+    ".agents/skills/rundot-feature-notifications/systems/notifications/notifications.ts",
+    ".agents/skills/rundot-analytics-ops/references/release-progression-dashboard.md",
     ".gitattributes",
     ".github/workflows/ci.yml",
     ".gitignore",
@@ -305,6 +366,7 @@ for (const required of [
     "docs/deterministic-simulation.md",
     "docs/monetization.md",
     "docs/multi-resolution.md",
+    "docs/notifications.md",
     "docs/randomness.md",
     "docs/rendering-architecture.md",
     "docs/run-capabilities.md",
@@ -318,6 +380,7 @@ for (const required of [
     "scripts/audit-public.mjs",
     "scripts/check-build.mjs",
     "scripts/simulate-demo.mjs",
+    "scripts/test-notification-self-test.ts",
     "scripts/test-noise-random.mjs",
     "additional_features/README.md",
     "additional_features/client/commerce.ts",
@@ -355,6 +418,7 @@ for (const required of [
     "src/rendering/three/createThreeReference.ts",
     "src/sdk/featureLab.ts",
     "src/systems/serverTime.ts",
+    "src/systems/notificationSelfTest.ts",
     "src/ui/RenderingLabScreen.tsx",
     "src/ui/RunFeaturesScreen.tsx",
     "tsconfig.additional-features.json",
@@ -834,7 +898,10 @@ expect(
     app.includes("TOAST_AUTO_HIDE_MS = 4_000") &&
         app.includes("window.setTimeout") &&
         app.includes("window.clearTimeout") &&
-        app.includes("store.get().toast === toast"),
+        // The timer guard must key on toastSeq, not the toast TEXT: two
+        // identical messages in a row compare equal, so a text guard lets the
+        // first timer dismiss the second toast almost immediately.
+        app.includes("store.get().toastSeq === seq"),
     "in-game toasts must auto-hide safely without an older timer clearing a replacement",
 );
 expect(
@@ -849,6 +916,17 @@ expect(
         publicAudit.includes("credential-shaped value") &&
         verificationGuide.includes("npm run audit:public"),
     "public repository audit or its documentation is incomplete",
+);
+/*
+ * The `ERR_IMPORT_ATTRIBUTE_MISSING` trap costs a debugging cycle every time it
+ * is rediscovered, because the error names an import attribute and reads like a
+ * broken test runner rather than "this module reaches the string table". The
+ * fix is the dependency-free sibling, not a loader — keep both documented.
+ */
+expect(
+    verificationGuide.includes("ERR_IMPORT_ATTRIBUTE_MISSING") &&
+        verificationGuide.includes("no game imports"),
+    "verification docs must explain why Node test targets have to be dependency-free",
 );
 expect(
     readme.includes("docs/verification.md") &&
@@ -962,6 +1040,33 @@ if (fs.existsSync(path.join(root, retentionConfigPath))) {
     expect(
         !/isOptedOut\s*:\s*\(\)\s*=>\s*!?\s*notificationsGranted\b/.test(retentionConfig),
         "isOptedOut must read the player's settings toggle, never a cached permission probe",
+    );
+    /*
+     * Same bug one level up. `notificationsEnabled` mirrors the RUN app's
+     * permission, which is app-wide — the SDK's probe and setter carry no game
+     * id. Gating on it made "we have not read the permission yet" look
+     * identical to "the player asked us to stop", so every player who had
+     * already allowed RUN notifications got nothing unless they went hunting
+     * for a Settings toggle. Only the explicit opt-out may gate.
+     */
+    expect(
+        /isOptedOut\s*:\s*\(\)\s*=>\s*store\.get\(\)\.notificationsOptOut\b/.test(retentionConfig),
+        "isOptedOut must read notificationsOptOut, not the notificationsEnabled permission mirror",
+    );
+    expect(
+        runtimeServices.includes("readNotificationPermission()") &&
+            !/if\s*\(!state\.notificationsEnabled\s*\|\|/.test(runtimeServices),
+        "rearmNotifications must read the app-wide permission at boot and gate only on the player's opt-out",
+    );
+    /*
+     * setLocalNotificationsEnabled(false) revokes the RUN app's permission for
+     * EVERY game. One player switching our reminders off must not silence the
+     * rest of the fleet — turning off is a game-local opt-out plus a cancelAll.
+     */
+    expect(
+        !/setNotificationPreference\(\s*false\s*\)/.test(settingsScreen) &&
+            settingsScreen.includes("notificationsOptOut: true"),
+        "the settings toggle must opt out of this game only, never revoke the app-wide permission",
     );
 }
 

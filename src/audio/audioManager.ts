@@ -212,6 +212,14 @@ class AudioManager {
 
     private scheduleMusic(): void {
         if (!this.context || !this.musicBus || this.paused) return;
+        // After a main-thread stall longer than the lookahead, nextMusicTime is
+        // in the past; scheduling every missed step would clamp them all to
+        // "now" and blast a pile of simultaneous notes. Skip ahead instead.
+        if (this.nextMusicTime < this.context.currentTime) {
+            const missed = Math.ceil((this.context.currentTime - this.nextMusicTime) / MUSIC_STEP_SECONDS);
+            this.musicStep += missed;
+            this.nextMusicTime += missed * MUSIC_STEP_SECONDS;
+        }
         while (this.nextMusicTime < this.context.currentTime + SCHEDULE_AHEAD_SECONDS) {
             const pattern = store.get().phase === "playing" ? PLAY_PATTERN : MENU_PATTERN;
             const patternStep = this.musicStep % pattern.length;

@@ -5,7 +5,7 @@ import { useStore } from "../state/store.ts";
 export default function StatsScreen() {
     const state = useStore((value) => value);
     const stats: Array<[string, number]> = [
-        ["BEST BOUNCES", state.score],
+        ["BEST BOUNCES", state.bestScore],
         ["TOTAL PLAYS", state.totalPlays],
         ["LEVEL", state.level],
         ["COINS", state.coins],

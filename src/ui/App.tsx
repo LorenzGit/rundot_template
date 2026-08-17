@@ -149,15 +149,18 @@ function DevelopmentToolsSlot() {
 
 function Toast() {
     const toast = useStore((state) => state.toast);
+    const seq = useStore((state) => state.toastSeq);
 
     useEffect(() => {
         if (!toast) return;
         const timeoutId = window.setTimeout(() => {
-            // Do not let an older toast's timer dismiss a newer message.
-            if (store.get().toast === toast) store.patch({ toast: null });
+            // Do not let an older toast's timer dismiss a newer message. The
+            // seq comparison (not the text) keeps a repeated identical toast
+            // alive for its own full duration.
+            if (store.get().toastSeq === seq) store.patch({ toast: null });
         }, TOAST_AUTO_HIDE_MS);
         return () => window.clearTimeout(timeoutId);
-    }, [toast]);
+    }, [toast, seq]);
 
     if (!toast) return null;
     return (

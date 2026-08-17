@@ -23,8 +23,8 @@ code, so you should not need to ask the developer questions.
 
 1. Read `systems/notifications/README.md` fully, then `references/run-sdk-notes.md`.
 2. Inventory the host game: rendering/UI approach, where
-   `RundotGameAPI.initializeAsync()` is awaited, whether a per-frame
-   `update(dt)` loop exists, and any existing persistence to integrate with.
+   its bounded SDK 5.24 readiness check runs, whether a per-frame `update(dt)`
+   loop exists, and any existing persistence to integrate with.
 3. Copy the template into the host (suggested home:
    `src/helpers/notifications/`), keeping file names. If the host is plain
    JavaScript, strip the type annotations while copying — the runtime code is
@@ -38,7 +38,8 @@ code, so you should not need to ask the developer questions.
 
 - Every `RundotGameAPI` call can reject, and an unhandled rejection crashes
   the game — keep the template's try/catch posture in code you add.
-- Await `RundotGameAPI.initializeAsync()` once at boot before any other SDK call.
+- SDK 5.24 initializes on import. Use a bounded `isAvailable()` / `isMock()`
+  readiness check; do not add the removed manual `initializeAsync()` call.
 - Degrade gracefully outside the RUN host: local dev uses deterministic SDK
   mocks; follow the feature README for expected behavior, and treat unexpected
   `null`/failure as "unknown", never as an error state.

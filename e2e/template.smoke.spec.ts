@@ -1,6 +1,24 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures.ts";
 
+declare global {
+    /**
+     * Installed by src/qa/browserContract.ts in dev builds. Declared here so
+     * the bare page.evaluate() call sites typecheck under strict tsconfigs —
+     * without this the spec breaks the moment e2e/ joins a typecheck project.
+     */
+    // biome-ignore lint: `var` is required for globalThis augmentation
+    var __gameQa:
+        | {
+              snapshot(): QaSnapshot;
+              returnToMenu(): void;
+              openRendererLab(): void;
+              startRun(): void;
+              setPaused(paused: boolean): void;
+          }
+        | undefined;
+}
+
 interface QaSnapshot {
     phase: "loading" | "menu" | "playing";
     menuScreen: string;
@@ -253,6 +271,16 @@ test("development diagnostics tune only the current session", async ({ page }) =
 
     await page.getByRole("button", { name: "RESET SESSION TUNING" }).click();
     await expect(page.getByTestId("safe-area-guide")).toHaveCount(0);
+});
+
+test("settings exposes an honest five-second notification test", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openReady(page, "qa=1&screen=settings");
+
+    const testAlert = page.getByRole("button", { name: "ALERT · 5 SEC" });
+    await expect(testAlert).toBeVisible();
+    await testAlert.click();
+    await expect(page.getByRole("status")).toHaveText(/AVAILABLE INSIDE THE RUN APP|NO ALERT SCHEDULED/);
 });
 
 test("toasts support tap dismissal and auto-hide", async ({ page }) => {

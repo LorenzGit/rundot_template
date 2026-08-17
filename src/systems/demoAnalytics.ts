@@ -22,9 +22,16 @@ export const demoLevelAnalytics = createLevelAnalytics({
 export function startDemoLevel(): void {
     inputRecordedThisRun = false;
     const state = store.get();
-    // Steps 3 and 7 are the same call site: the once-ever marks make the
-    // second press count as "came back for another round" on its own.
-    analytics.funnelStep("ftue", state.totalPlays <= 1 ? 3 : 6, { play_number: state.totalPlays });
+    // Steps 3 and 6 share this call site: the once-ever marks make the second
+    // press count as "came back for another round" on its own. Step 6 is also
+    // gated on step 5 having fired — an abandon-then-restart otherwise put
+    // more players at "second level" than at "first completion", the exact
+    // non-monotonic shape that reads as broken instrumentation.
+    if (state.totalPlays <= 1) {
+        analytics.funnelStep("ftue", 3, { play_number: state.totalPlays });
+    } else if (!analytics.isFirstTime("ftue", 5)) {
+        analytics.funnelStep("ftue", 6, { play_number: state.totalPlays });
+    }
     demoLevelAnalytics.start({
         level_id: `template_demo_${state.level}`,
         level: state.level,

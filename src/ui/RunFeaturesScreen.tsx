@@ -16,6 +16,7 @@ import {
     type RunDemoResult,
 } from "../sdk/featureLab.ts";
 import { getRunCapabilities, type HapticStyle, type VerifiedActionResult } from "../sdk/runSdk.ts";
+import { dailySystems } from "../systems/dailySystems.ts";
 import { saveSystem } from "../systems/save.ts";
 import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore } from "../state/store.ts";
@@ -82,6 +83,9 @@ export default function RunFeaturesScreen() {
         const result = await runtimeServices.watchResultsAd();
         if (result === "verified") {
             store.patch({ coins: store.get().coins + 100 });
+            // Every coin source must feed the coins quest, or "EARN 100 COINS"
+            // is uncompletable on days the daily reward pays less than 100.
+            dailySystems.recordQuestProgress("coins", 100);
             await saveSystem.flush();
             audioManager.play("reward");
             void runtimeServices.haptic("success");

@@ -154,6 +154,26 @@ home-directory path or private Codex reference inside them.
 - Preserve the vendored skill's Apache-2.0 license and its entry in
   `THIRD_PARTY_NOTICES.md` when copying or redistributing this template.
 
+## One version
+
+A published game has exactly one version number. `package.json` is the source of
+truth: the menu renders it and every analytics event is tagged with it as
+`build_version`. Once the game is published it **must** equal the version RUN
+serves on the Public tag.
+
+Let them drift and the number a player quotes in a bug report and the number in
+your dashboards describe different builds, so you cannot tell which code produced
+a session. Never pin `package.json` to a separate development track.
+
+- Unpublished games are exempt — there is nothing to match until a Public tag
+  exists.
+- `rundot deploy --bump <Major|Minor|Patch>` decides the new version. Set
+  `package.json` and `package-lock.json` to the version deploy produced, in the
+  same commit as the ship.
+- Verify with `npm run version:check`. It passes for unpublished games, and needs
+  network plus a logged-in CLI, so it sits outside `npm run check`. Run it after
+  deploying and before committing.
+
 ## Verification
 
 Run `npm run check:all` after template changes. The invariant suite verifies

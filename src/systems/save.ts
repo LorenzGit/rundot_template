@@ -3,10 +3,10 @@ import { store, type AppState, type PendingPurchaseIntentSnapshot } from "../sta
 
 const SAVE_KEY = "rundot_template-save";
 const LEGACY_SAVE_KEYS = ["template-pixi-webgpu-save", "template-pixi-webgpu.save"] as const;
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 export interface GameSaveV3 {
-    version: 3;
+    version: 4;
     settings: Pick<
         AppState,
         | "musicEnabled"
@@ -14,13 +14,14 @@ export interface GameSaveV3 {
         | "sfxEnabled"
         | "sfxVolume"
         | "notificationsEnabled"
+        | "notificationsOptOut"
         | "notificationsConsent"
         | "hapticsEnabled"
         | "reducedMotion"
         | "locale"
         | "quality"
     >;
-    progress: Pick<AppState, "score" | "coins" | "level" | "totalPlays">;
+    progress: Pick<AppState, "score" | "bestScore" | "coins" | "level" | "totalPlays">;
     retention: Pick<
         AppState,
         | "dailyRewardLastClaimDay"
@@ -29,6 +30,7 @@ export interface GameSaveV3 {
         | "dailyQuestDay"
         | "dailyQuestProgress"
         | "dailyQuestClaimIds"
+        | "analyticsFunnelMarks"
     >;
     /** v3: interrupted-checkout intent and the last authoritative ownership read */
     commerce: Pick<AppState, "pendingPurchaseIntent" | "ownedProductIds">;
@@ -113,6 +115,7 @@ function snapshot(): GameSaveV3 {
             sfxEnabled: state.sfxEnabled,
             sfxVolume: state.sfxVolume,
             notificationsEnabled: state.notificationsEnabled,
+            notificationsOptOut: state.notificationsOptOut,
             notificationsConsent: state.notificationsConsent,
             hapticsEnabled: state.hapticsEnabled,
             reducedMotion: state.reducedMotion,
@@ -121,6 +124,7 @@ function snapshot(): GameSaveV3 {
         },
         progress: {
             score: state.score,
+            bestScore: state.bestScore,
             coins: state.coins,
             level: state.level,
             totalPlays: state.totalPlays,
@@ -132,6 +136,7 @@ function snapshot(): GameSaveV3 {
             dailyQuestDay: state.dailyQuestDay,
             dailyQuestProgress: state.dailyQuestProgress,
             dailyQuestClaimIds: state.dailyQuestClaimIds,
+            analyticsFunnelMarks: state.analyticsFunnelMarks,
         },
         commerce: {
             pendingPurchaseIntent: state.pendingPurchaseIntent,
@@ -144,7 +149,10 @@ function migrate(raw: unknown): GameSaveV3 | null {
     if (!raw || typeof raw !== "object") return null;
     const candidate = raw as Omit<Partial<GameSaveV3>, "version"> & { version?: number };
     if (
-        (candidate.version !== 1 && candidate.version !== 2 && candidate.version !== SAVE_VERSION) ||
+        (candidate.version !== 1 &&
+            candidate.version !== 2 &&
+            candidate.version !== 3 &&
+            candidate.version !== SAVE_VERSION) ||
         !candidate.settings ||
         !candidate.progress
     )
@@ -175,12 +183,23 @@ function migrate(raw: unknown): GameSaveV3 | null {
                 ["unknown", "granted", "denied"] as const,
                 defaults.settings.notificationsConsent,
             ),
-            notificationsEnabled:
-                candidate.settings.notificationsConsent === "granted" &&
-                candidate.settings.notificationsEnabled === true,
+            // Additive back-fill: saves written before the opt-out existed have
+            // no field, and "absent" must mean "has not opted out" — defaulting
+            // the other way would re-silence every existing player.
+            notificationsOptOut: booleanOr(candidate.settings.notificationsOptOut, false),
+            // Restored only so Settings paints something sane before the boot
+            // probe lands; runtimeServices re-derives it from the live host
+            // permission on the first refresh.
+            notificationsEnabled: booleanOr(candidate.settings.notificationsEnabled, false),
         },
         progress: {
             score: nonNegativeInteger(candidate.progress.score),
+            // Additive back-fill: older saves have no bestScore, so seed it
+            // from the last run's score rather than losing the record entirely.
+            bestScore: Math.max(
+                nonNegativeInteger(candidate.progress.bestScore),
+                nonNegativeInteger(candidate.progress.score),
+            ),
             coins: nonNegativeInteger(candidate.progress.coins),
             level: Math.max(1, nonNegativeInteger(candidate.progress.level, 1)),
             totalPlays: nonNegativeInteger(candidate.progress.totalPlays),
@@ -204,6 +223,7 @@ function migrate(raw: unknown): GameSaveV3 | null {
                       )
                     : {},
             dailyQuestClaimIds: recentStrings(retention.dailyQuestClaimIds, 180),
+            analyticsFunnelMarks: recentStrings(retention.analyticsFunnelMarks, 160),
         },
         commerce: {
             pendingPurchaseIntent: pendingIntentOrNull(commerce.pendingPurchaseIntent),
@@ -222,12 +242,20 @@ function parse(raw: string | null): GameSaveV3 | null {
 }
 
 function apply(save: GameSaveV3): void {
-    store.patch({ ...save.settings, ...save.progress, ...save.retention, ...save.commerce });
+    const runtimeMarks = store.get().analyticsFunnelMarks;
+    store.patch({
+        ...save.settings,
+        ...save.progress,
+        ...save.retention,
+        analyticsFunnelMarks: [...new Set([...save.retention.analyticsFunnelMarks, ...runtimeMarks])],
+        ...save.commerce,
+    });
 }
 
 let lastSaved = "";
 let pendingSave: string | null = null;
 let flushInFlight: Promise<boolean> | null = null;
+let scheduledFlushTimer = 0;
 
 function usesRunStorage(): boolean {
     const capabilities = getRunCapabilities();
@@ -278,7 +306,25 @@ export const saveSystem = {
         return "defaults";
     },
 
+    /**
+     * Debounced flush for high-frequency gameplay writes (per-bounce quest
+     * progress). Coalesces a burst into one write; an explicit flush() —
+     * lifecycle, claims, settings — always runs immediately and absorbs any
+     * pending schedule.
+     */
+    scheduleFlush(delayMs = 2_000): void {
+        if (scheduledFlushTimer) return;
+        scheduledFlushTimer = window.setTimeout(() => {
+            scheduledFlushTimer = 0;
+            void saveSystem.flush();
+        }, delayMs);
+    },
+
     async flush(): Promise<boolean> {
+        if (scheduledFlushTimer) {
+            window.clearTimeout(scheduledFlushTimer);
+            scheduledFlushTimer = 0;
+        }
         const serialized = JSON.stringify(snapshot());
         if (serialized === lastSaved && pendingSave === null) return true;
         pendingSave = serialized;

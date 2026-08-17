@@ -72,3 +72,23 @@ completion rate, and median/p95 duration by level and game version.
 Paid-acquisition analysis also needs the host's normalized campaign identity
 joined to the same session/events. Level instrumentation measures behavior; it
 does not by itself prove which advertisement acquired the player.
+
+## Dashboard and export contract
+
+Dashboard observations must be append-only and carry collection time, source
+window, query state, row count, and per-stage freshness. Keep interactive game
+refreshes small and concurrent; collect slow funnel, event, monetization,
+experiment, and campaign exports on a scheduled deep pass without discarding
+the last good result.
+
+Do not confuse declaration with observation. A missing event in a top-N sample
+is not proven broken, and an all-version aggregate cannot measure a release.
+Release conclusions require outcome metrics grouped by `build_version`, a
+pre-release baseline, and adequate new-version volume. Mark non-monotonic
+funnels suspect until ordering or lifetime deduplication is repaired.
+
+The next platform export to prioritize is a privacy-safe dimensional custom
+event aggregate over approved low-cardinality properties (`build_version`,
+`level`, `level_id`, mode, difficulty), including players, counts, median, and
+p95. Add ingestion rejection/duplicate/missing-property counts, deploy
+annotations, campaign attribution, and error-rate denominators alongside it.

@@ -22,7 +22,9 @@ interface PixiOverlayOptions {
 type RendererPreference = "webgpu" | "webgl";
 
 function rendererBackend(app: Application): RendererPreference {
-    return app.renderer.constructor.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
+    // renderer.name survives minification; constructor.name does not (prod
+    // builds misread WebGPU as WebGL through the mangled class name).
+    return app.renderer.name.toLowerCase().includes("webgpu") ? "webgpu" : "webgl";
 }
 
 async function initializePixi(

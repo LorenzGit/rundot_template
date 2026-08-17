@@ -10,7 +10,17 @@ export type MonetizationEventName =
     | "ad_offer_viewed"
     | "ad_requested"
     | "ad_result"
-    | "reward_granted";
+    | "reward_granted"
+    | "iap_purchase_complete"
+    | "iap_purchase_failed"
+    | "rewarded_ad_watched"
+    | "rewarded_ad_dismissed"
+    | "currency_earned"
+    | "currency_spent"
+    | "premium_purchased"
+    | "offer_dismissed"
+    | "shop_purchase"
+    | "item_equipped";
 
 export type MonetizationEventValue = string | number | boolean | null | undefined;
 export type MonetizationEventPayload = Record<string, MonetizationEventValue>;

@@ -115,7 +115,7 @@ export function createNotifications(config: NotificationsConfig): NotificationsS
 
         /**
          * Bootstrap the platform-level permission: probe, request if needed,
-         * confirm, cache. Call ONCE at boot (after initializeAsync), then
+         * confirm, cache. Call ONCE at boot after the host handshake, then
          * schedule — NOT from onSleep/onQuit, where chaining several awaited
          * RPCs (isEnabled → setEnabled → isEnabled → schedule) gets cut off
          * mid-chain by runtime teardown. Respects the opt-out gate so a
@@ -162,7 +162,14 @@ export function createNotifications(config: NotificationsConfig): NotificationsS
             if (!Number.isFinite(delaySeconds) || delaySeconds <= 0) return;
             try {
                 await RundotGameAPI.notifications.cancelNotification(id);
-                await RundotGameAPI.notifications.scheduleAsync(title, body, Math.ceil(delaySeconds), id);
+                await RundotGameAPI.notifications.submitMessageAsync({
+                    channels: ["local"],
+                    title,
+                    body,
+                    delaySeconds: Math.ceil(delaySeconds),
+                    notificationId: id,
+                    collapseKey: id,
+                });
             } catch (e) {
                 /* mock mode / host declined — never fatal */
             }

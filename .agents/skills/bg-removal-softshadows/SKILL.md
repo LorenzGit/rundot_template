@@ -1,16 +1,16 @@
 ---
 name: bg-removal-softshadows
-description: "Remove image backgrounds while preserving soft contact shadows as translucent black. Two engines: (A) BiRefNet AI matte + shadow double pass (birefnet_cutout.py) for complex/photographic backgrounds; (B) zero-dependency wand/chroma cutout (cutout.mjs) for uniform backgrounds and green/magenta screens. Use whenever a cutout must keep its soft shadow. rundot's birefnet removal is a fallback but does NOT retain shadows."
+description: "Remove image backgrounds while preserving soft contact shadows as translucent black. Engines: (A) BiRefNet AI matte + shadow double pass; (B) wand/chroma cutout.mjs; (C) chroma-decontam — matte + F=(C-(1-α)G)/α edge reconstruction that kills green halos on anti-aliased edges. Use whenever a cutout must keep its soft shadow or clean green-screen keys. rundot's birefnet removal is a fallback but does NOT retain shadows."
 ---
 
 # Background removal with soft-shadow preservation
 
-Two engines, one shadow math. Both end in the same **double pass**: a cutout
-(layer 1) plus recovery of *neutral darkening* pixels as **translucent black**
-(layer 2) — the exact un-compositing of a multiply shadow, so the asset
-darkens any new background instead of graying. Colored elements fail the
-neutrality test (same chroma as a background anchor, lower luminance,
-per-channel residual ≤ 12, 3% noise floor) and are never resurrected.
+Core engines plus **chroma edge decontamination**. Shadow modes end in a
+**double pass**: a cutout (layer 1) plus recovery of *neutral darkening*
+pixels as **translucent black** (layer 2) — the exact un-compositing of a
+multiply shadow. Colored elements fail the neutrality test (same chroma as
+a background anchor, lower luminance, per-channel residual ≤ 12, 3% noise
+floor) and are never resurrected.
 
 ## Engine A — BiRefNet AI matte + shadow double pass
 
@@ -68,7 +68,41 @@ full option list in the script header.
 ```bash
 node $SKILL/cutout.mjs in.png -o out.png --seed 0,0,32 --seed 767,0,32
 node $SKILL/cutout.mjs in.png -o out.png --mode chroma --key 00ff00
+# wand non-contiguous (global color match):
+node $SKILL/cutout.mjs in.png -o out.png --mode wand --contiguous off
 ```
+
+## Engine C — chroma-decontam (preferred for green screens)
+
+`chroma_decontam.mjs` (+ `cutout.mjs --mode chroma-decontam`) — **does not**
+only punch green transparent. Anti-aliased edges are blends
+`C ≈ αF + (1−α)G`; after estimating alpha it recovers:
+
+```text
+F = (C − (1−α) G) / α
+```
+
+then mild green despill. That removes the green halo Photoshop-style “select
+green and delete” leaves on hair, outlines, and glow.
+
+```bash
+# Preferred for rendered / Imagine green-screen stills
+node $SKILL/cutout.mjs in.png -o out.png --mode chroma-decontam \
+  --key 00ff00 --screen-mode auto-border \
+  --metric green-excess --decontam-low 0.12 --decontam-high 0.42 \
+  --feather 0.5 --spill-amount 0.2 --reconstruct on
+```
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `--screen-mode` | `auto-border` | Estimate `G` from border (or `fixed` → `--key`) |
+| `--metric` | `green-excess` | `g−max(r,b)` / `ycbcr` / `rgb` |
+| `--decontam-low/high` | 0.12 / 0.42 | smoothstep alpha band |
+| `--feather` | 0.5 | blur **alpha only** (px) |
+| `--spill-amount` | 0.2 | 0 = hard despill, 1 = none |
+| `--reconstruct` | on | edge FG reconstruction |
+
+Import: `import { chromaDecontam, chromaDecontamCutout } from './chroma_decontam.mjs'`.
 
 ## Seeding/anchor craft (both engines)
 
@@ -109,7 +143,9 @@ node $SKILL/cutout.mjs in.png -o out.png --mode chroma --key 00ff00
 ## Files
 
 - `birefnet_cutout.py` — engine A CLI.
-- `cutout.mjs` — engine B CLI/module (`decodePng`, `encodePng`, `wandCutout`,
-  `chromaCutout` importable).
+- `cutout.mjs` — engine B/C CLI/module (`decodePng`, `encodePng`, `wandCutout`,
+  `chromaCutout` importable; `--mode chroma-decontam` for engine C).
+- `chroma_decontam.mjs` — engine C pure matte + edge reconstruction.
 - `test-birefnet-shadow.py` — torch-free test of engine A's shadow/refine
   logic. `test-cutout.mjs` — engine B synthetic test with golden PNGs.
+- `test-chroma-decontam.mjs` — engine C synthetic green-halo fixture.

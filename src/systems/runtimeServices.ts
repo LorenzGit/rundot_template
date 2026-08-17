@@ -5,8 +5,8 @@ import {
     getRunCapabilities,
     purchaseVerifiedShopItem,
     cancelLocalNotification,
+    readNotificationPermission,
     recordAnalytics,
-    recordFunnelStep,
     showVerifiedRewardedAd,
     showVerifiedInterstitialAd,
     triggerHaptic,
@@ -21,15 +21,16 @@ import { returnReminders } from "./retention/retentionConfig.ts";
 export interface RuntimeConfig {
     dailyRewardsEnabled: boolean;
     dailyQuestsEnabled: boolean;
-    notificationDelaySeconds: number;
     adsEnabled: boolean;
     shopEnabled: boolean;
 }
 
+// The return-reminder cadence is deliberately NOT remoteable: it is fixed at
+// 24/48/72h in returnReminders.ts. A parsed-but-unused delay knob sat here for
+// a while and misled LiveOps operators into "tuning" a value nothing read.
 const DEFAULTS: Readonly<RuntimeConfig> = Object.freeze({
     dailyRewardsEnabled: true,
     dailyQuestsEnabled: true,
-    notificationDelaySeconds: 86_400,
     adsEnabled: false,
     shopEnabled: false,
 });
@@ -53,11 +54,9 @@ function normalize(values: Record<string, unknown>): RuntimeConfig {
         root.monetization && typeof root.monetization === "object"
             ? (root.monetization as Record<string, unknown>)
             : {};
-    const delay = Number(root.notificationDelaySeconds);
     return {
         dailyRewardsEnabled: typeof root.dailyRewardsEnabled === "boolean" ? root.dailyRewardsEnabled : true,
         dailyQuestsEnabled: typeof root.dailyQuestsEnabled === "boolean" ? root.dailyQuestsEnabled : true,
-        notificationDelaySeconds: Number.isFinite(delay) ? Math.max(3_600, Math.min(delay, 604_800)) : 86_400,
         adsEnabled: monetization.adsEnabled === true && isConfiguredPlatformId(PLATFORM_IDS.rewardedResultsBonus),
         shopEnabled:
             monetization.shopEnabled === true &&
@@ -70,8 +69,14 @@ async function refreshLiveOps(): Promise<void> {
     clearScheduledRefresh();
     const snapshot = await fetchLiveOps();
     if (!snapshot) {
-        config = { ...DEFAULTS };
-        store.patch({ runtimeReady: true, runtimeConfigVersion: null });
+        // KEEP the live config on a failed fetch: resetting to DEFAULTS here
+        // yanked an enabled shop/ads surface for the rest of the session on a
+        // single resume-time network blip. Retry only where a host could
+        // actually answer — without the capability this null is permanent.
+        store.patch({ runtimeReady: true });
+        if (getRunCapabilities().liveops) {
+            nextRefreshTimer = window.setTimeout(() => startRefreshCycle(), 60_000);
+        }
         return;
     }
     config = normalize(snapshot.values);
@@ -95,8 +100,22 @@ async function refreshTime(): Promise<void> {
  * notification permission the first three depend on.
  */
 async function rearmNotifications(): Promise<void> {
+    // The RUN app owns notification permission and shares it across every game,
+    // so a player who allowed it anywhere has allowed it here. Read that state
+    // (silently — only the setter prompts) instead of requiring a visit to a
+    // Settings screen almost nobody opens.
+    const granted = await readNotificationPermission();
     const state = store.get();
-    if (!state.notificationsEnabled || state.notificationsConsent !== "granted") return;
+    store.patch({
+        notificationsEnabled: granted && !state.notificationsOptOut,
+        // A refused ask stays "denied" so Settings can offer OFF rather than
+        // ASK; anything else the host reports as off is simply not-yet-asked.
+        notificationsConsent: granted ? "granted" : state.notificationsConsent === "denied" ? "denied" : "unknown",
+    });
+    // Only the player's own opt-out stops the cadence. Scheduling without the
+    // host permission is a no-op, so gating on it would buy nothing and would
+    // silence every player whose grant lands after this read.
+    if (state.notificationsOptOut) return;
     // The pre-cadence reminder used its own id; leave it scheduled and the
     // player gets the old generic ping alongside the new specific ones.
     for (const legacy of [RETURN_REMINDER_ID, LEGACY_RETURN_REMINDER_ID]) {
@@ -134,9 +153,6 @@ export const runtimeServices = {
     },
     track(eventName: string, payload: Record<string, unknown> = {}): void {
         void recordAnalytics(eventName, { ...payload, build_version: packageJson.version });
-    },
-    funnel(step: number, name: string, funnel: string, funnelOrder = 0): void {
-        void recordFunnelStep(step, name, funnel, funnelOrder);
     },
     async haptic(style: HapticStyle): Promise<boolean> {
         return store.get().hapticsEnabled ? triggerHaptic(style) : false;

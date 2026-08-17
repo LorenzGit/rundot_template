@@ -699,6 +699,63 @@ body::before {
     border-color: #ffe36d;
     color: #ffe36d;
 }
+.notification-self-test {
+    margin-top: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.28);
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 94% 4%, rgba(255, 217, 90, 0.3), transparent 34%),
+        linear-gradient(145deg, rgba(69, 48, 145, 0.94), rgba(40, 31, 104, 0.96));
+    padding: 16px;
+    box-shadow: 0 6px 0 rgba(37, 24, 92, 0.34);
+}
+.notification-self-test .eyebrow {
+    margin: 0 0 4px;
+    color: #ffe36d;
+}
+.notification-self-test h3 {
+    margin: 0;
+    color: #fff;
+    font-size: 18px;
+}
+.notification-self-test > p:not(.eyebrow) {
+    margin: 10px 0 0;
+    color: #eee9ff;
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 1.42;
+}
+.notification-self-test .notification-self-test-disclaimer {
+    border-left: 4px solid #ffe36d;
+    background: rgba(255, 217, 90, 0.1);
+    padding: 8px 10px;
+}
+.notification-self-test button {
+    width: 100%;
+    min-height: 48px;
+    margin-top: 12px;
+    border: 3px solid #fff1bb;
+    border-radius: 15px;
+    background: linear-gradient(#ffd962, #ffb94e);
+    color: #4d2d72;
+    font-size: 13px;
+    font-weight: 1000;
+    letter-spacing: 0.06em;
+    box-shadow: 0 4px 0 rgba(104, 56, 99, 0.48);
+}
+.notification-self-test button:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(104, 56, 99, 0.48);
+}
+.notification-self-test button:disabled {
+    opacity: 0.62;
+}
+.notification-self-test .notification-self-test-status {
+    min-height: 19px;
+    color: #bfffe4;
+    font-size: 11px;
+    letter-spacing: 0.035em;
+}
 .feature-status-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));

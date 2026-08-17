@@ -44,8 +44,11 @@ export const returnReminders = createReturnReminders({
     resolveLaunch: () => resolveLaunchIntent(),
     // The player's settings toggle is a real opt-out and does gate. The consent
     // probe deliberately does not: it only annotates the scheduled event, so a
-    // stale or failed probe cannot silence the whole cadence.
-    isOptedOut: () => !store.get().notificationsEnabled,
+    // stale or failed probe cannot silence the whole cadence. Note this reads
+    // the explicit opt-out, NOT `notificationsEnabled` — that field mirrors the
+    // host permission, and gating on it would make an unread or not-yet-granted
+    // permission indistinguishable from a player who asked us to stop.
+    isOptedOut: () => store.get().notificationsOptOut,
     permissionHint: () => store.get().notificationsConsent === "granted",
     track: (event, payload) => analytics.event(event, payload),
 });

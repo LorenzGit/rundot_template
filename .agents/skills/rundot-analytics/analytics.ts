@@ -52,9 +52,15 @@ export function trackFunnel(
     }
 }
 
-/** Convenience: a screen/menu was shown. */
+/**
+ * Convenience: a screen/menu was shown.
+ *
+ * `screen_viewed`, not `screen_view` — the backend's core-loop allow-list
+ * matches the past-tense form, and anything off that list falls through to the
+ * 25-row `top_custom_events_30d` bucket. See event-catalog.md.
+ */
 export function trackScreenView(screen: string, payload?: AnalyticsPayload): void {
-    trackEvent("screen_view", { screen, ...payload });
+    trackEvent("screen_viewed", { screen, ...payload });
 }
 
 // ---------------------------------------------------------------------------

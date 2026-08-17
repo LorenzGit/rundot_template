@@ -53,11 +53,10 @@ If the game localizes strings, make `title`/`body` functions too (`title: () => 
 ### 2. Boot wiring
 
 ```ts
-import RundotGameAPI from '@series-inc/rundot-game-sdk/api';
 import { notifications } from './notificationsConfig';
 
-await RundotGameAPI.initializeAsync();
-// ... load save, etc.
+// SDK 5.24 initializes on import. Use the host game's bounded readiness
+// boundary, then load save state before reading the in-game opt-in.
 
 // Bootstrap the platform permission ONCE, then arm reminders while the app
 // is alive — they're registered with the OS long before any close, which is
@@ -161,7 +160,7 @@ For anything with a cooldown or timer the player will want to return for — a f
 | Delays | from the game's own gate durations (the source: 24h re-engagement ≈ one play-session cadence; 8h = the ad cooldown itself). Event reminder delays are always the live remaining cooldown, as a function |
 | Copy | match tone and vocabulary from the game's existing UI strings (toasts, menus); if the game is localized, resolve through its l10n at schedule time via function-valued `title`/`body` |
 | `isOptedIn` | wire to an existing notifications setting if one exists; otherwise add `settings.notifications: true` to the save schema (additive — no migration) plus a settings-row toggle following the host's settings UI pattern |
-| Where to wire boot | the host's boot path, after `initializeAsync()` and save load (the gate reads the save) |
+| Where to wire boot | the host's boot path, after its bounded SDK readiness check and save load (the gate reads the save) |
 | Where to wire end-of-run | the host's session-boundary functions: game over, run quit/abandon, "return to menu" — wherever a play session ends while the app is alive |
 
 ## SDK notes & gotchas
@@ -170,7 +169,7 @@ Exact API surface (`RundotGameAPI.notifications`, from the platform's NOTIFICATI
 
 | Method | Returns | Notes |
 |---|---|---|
-| `scheduleAsync(title, body, delaySeconds, id?, options?)` | `Promise<string \| null>` | resolves to the scheduled id, or `null` if the host declined. `options`: `{priority?: number (default 50 — numeric, not 'high'), groupId?: string, payload?: Record<string, any>}` |
+| `submitMessageAsync(input)` | `Promise<SubmitMessageResult>` | use typed `channels: ['local']`, `notificationId`, `collapseKey`, and `delaySeconds`; success requires a `local` result with status `scheduled` |
 | `cancelNotification(id)` | `Promise<boolean>` | `true` when something was actually cancelled; safe when nothing is pending |
 | `getAllScheduledLocalNotifications()` | `Promise<ScheduleLocalNotification[]>` | `{id, title?, body?, payload?, trigger?}` — your debugging window |
 | `isLocalNotificationsEnabled()` | `Promise<boolean>` | platform-level permission probe |
@@ -184,6 +183,8 @@ Gotchas:
 - **Permission UX:** `setLocalNotificationsEnabled(true)` can surface a host prompt. Call it once at boot, as `ensureEnabled()` does; never re-prompt a player whose in-game toggle is off (`ensureEnabled()` respects the gate for exactly this reason).
 - **Every call can reject; an unhandled rejection crashes the game.** The template try/catches everything and its methods never reject — keep that posture in wiring code.
 - **Mock mode:** outside the RUN host, all calls no-op or return nothing. The template treats that as "unknown", never as an error; verify real delivery on a device or host build.
+- **Local is not multiplayer push.** `channels: ['local']` never contacts the server. It proves only permission and scheduling on the current device. An opponent move alert must come from server-authoritative room code or a protected `send_inbox_message` recipe; see `docs/notifications.md` in the RUN template.
+- **Do not cast invented channels.** SDK 5.24 accepts only the channels in its declarations. A cast to `"push"` hides a missing platform feature and fails at runtime.
 - **Deeplinking:** a tapped notification launches the game; detect it with `RundotGameAPI.app.resolveLaunchIntent()` — `intent.kind === 'notification'` with the schedule-time `payload` in `intent.params`. Only needed if a reminder should land somewhere other than the default boot screen.
 - **RCS/SMS cross-channel messaging** (`requestRCSOptInAsync` etc.) is a separate BETA surface with regulatory (TCPA) constraints — opt-in must be a user gesture. Out of scope for this template; see the platform NOTIFICATIONS doc before touching it.
 
@@ -200,5 +201,5 @@ Gotchas:
 3. Trigger resume and an end-of-run several times: still exactly one entry per id (dedupe holds), each re-arm resetting the delay.
 4. Consume the event-gated thing → its reminder appears with the live cooldown; collect it in-app → the entry disappears.
 5. Toggle notifications OFF in settings: pending list empties; play a run — nothing new is scheduled. Toggle ON: nothing schedules immediately, but the next resume/run-end/boot re-arms.
-6. Delivery smoke test: temporarily override a delay to ~15s (`notifications.arm('re-engagement', 15)`), background the app, notification arrives. Then the hard-close version: arm at boot, force-kill the app, the reminder still fires — this proves alive-scheduling.
+6. Device smoke test: use the Settings five-second probe, tap it, and close RUN immediately. Confirm the OS alert arrives. This proves only local scheduling; test multiplayer push and inbox separately with two identities and a disconnected receiver.
 7. Opted-out fresh profile (settings off before first `ensureEnabled()`): no permission prompt appears.

@@ -38,6 +38,8 @@ export interface AppState {
 
     /** Core gameplay counters shown in HUD / menus */
     score: number;
+    /** Lifetime best of `score` — the record Stats shows; persisted in the save. */
+    bestScore: number;
     coins: number;
     level: number;
     totalPlays: number;
@@ -47,7 +49,14 @@ export interface AppState {
     musicVolume: number;
     sfxEnabled: boolean;
     sfxVolume: number;
+    /** Derived each boot from the host permission and the opt-out below. */
     notificationsEnabled: boolean;
+    /**
+     * The player's own "not in this game" choice, set only from Settings.
+     * Separate from the host permission because that permission is shared by
+     * every RUN game: turning reminders off here must not silence the others.
+     */
+    notificationsOptOut: boolean;
     notificationsConsent: "unknown" | "granted" | "denied";
     hapticsEnabled: boolean;
     reducedMotion: boolean;
@@ -56,6 +65,12 @@ export interface AppState {
 
     /** One-time toasts surfaced from systems/purchases/tutorials */
     toast: string | null;
+    /**
+     * Bumped every time a toast is SET (see store.patch). Keying on the text
+     * alone breaks when the same message fires twice: the snapshot compares
+     * equal, React skips the re-render, and the first timer kills the second.
+     */
+    toastSeq: number;
 
     /** Commerce state mirrored from save */
     pendingPurchaseIntent: PendingPurchaseIntentSnapshot | null;
@@ -69,6 +84,8 @@ export interface AppState {
     dailyQuestDay: string | null;
     dailyQuestProgress: Record<string, number>;
     dailyQuestClaimIds: string[];
+    /** Once-ever analytics marks must live in host-backed save, not iframe localStorage. */
+    analyticsFunnelMarks: string[];
     runtimeReady: boolean;
     runtimeConfigVersion: string | null;
     trustedTimeReady: boolean;
@@ -83,6 +100,7 @@ let state: AppState = {
     menuScreen: "main",
 
     score: 0,
+    bestScore: 0,
     coins: 0,
     level: 1,
     totalPlays: 0,
@@ -92,6 +110,7 @@ let state: AppState = {
     sfxEnabled: true,
     sfxVolume: 0.7,
     notificationsEnabled: false,
+    notificationsOptOut: false,
     notificationsConsent: "unknown",
     hapticsEnabled: true,
     reducedMotion: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
@@ -99,6 +118,7 @@ let state: AppState = {
     quality: "high",
 
     toast: null,
+    toastSeq: 0,
     pendingPurchaseIntent: null,
     ownedProductIds: [],
     dailyRewardLastClaimDay: null,
@@ -107,6 +127,7 @@ let state: AppState = {
     dailyQuestDay: null,
     dailyQuestProgress: {},
     dailyQuestClaimIds: [],
+    analyticsFunnelMarks: [],
     runtimeReady: false,
     runtimeConfigVersion: null,
     trustedTimeReady: false,
@@ -118,7 +139,12 @@ export const store = {
     },
 
     patch(partial: Partial<AppState>): void {
-        state = { ...state, ...partial };
+        // Stamp toastSeq whenever a toast is set so every producer gets the
+        // repeat-safe behavior without changing its call site.
+        state =
+            typeof partial.toast === "string"
+                ? { ...state, ...partial, toastSeq: state.toastSeq + 1 }
+                : { ...state, ...partial };
         for (const l of listeners) l();
     },
 

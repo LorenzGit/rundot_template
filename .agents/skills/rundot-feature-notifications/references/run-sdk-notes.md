@@ -1,16 +1,16 @@
 # RUN SDK notes (distilled)
 
-Condensed facts from the RUN SDK v5.23.0 documentation that the system templates rely on. **If the host game has local SDK docs, prefer `rundot/docs/` (legacy installs: `.rundot/docs/`) as the source of truth** because the SDK evolves.
+Condensed facts from the RUN SDK v5.24.0 documentation that the system templates rely on. **If the host game has installed SDK docs, prefer `node_modules/@series-inc/rundot-game-sdk/docs/` as the source of truth** because the SDK evolves.
 
 ## Import & initialization
 
 ```js
 import RundotGameAPI from '@series-inc/rundot-game-sdk/api';
-
-await RundotGameAPI.initializeAsync();   // once, at boot, before any other SDK call
 ```
 
-The SDK initializes on import and `initializeAsync()` resolves when the host handshake completes. Gate *all* host RPCs behind it.
+SDK 5.24 initializes on import. There is no public `initializeAsync()` call.
+Use a bounded `isAvailable()` / `isMock()` handshake and capability checks before
+host RPCs so plain-browser development remains playable.
 
 **Every SDK method can reject, and an unhandled promise rejection crashes the game.** Always `try/catch` (or `.catch()`) around SDK calls. In local dev there is no host, so the SDK uses mocks; treat unexpected `null`/failure as "unknown," never as an error state shown to the player.
 
@@ -82,7 +82,13 @@ Subscriptions: `iap.isUserSubscribed(tier)` (tier hierarchy — higher tiers sat
 
 ## Notifications (`RundotGameAPI.notifications`)
 
-`isLocalNotificationsEnabled()`, `setLocalNotificationsEnabled(true)`, `scheduleAsync(title, body, delaySeconds, customId)`, `cancelNotification(customId)`. Best practices: dedupe with meaningful custom IDs (cancel-first, then schedule), cancel when the task is done, small payloads, try/catch everything, and schedule while alive (see lifecycle gotcha above).
+`isLocalNotificationsEnabled()`, `setLocalNotificationsEnabled(true)`,
+`submitMessageAsync(input)`, and `cancelNotification(customId)`. For a local
+alert, use typed `channels: ['local']`, a stable `notificationId`, the same
+`collapseKey`, and `delaySeconds`. Cancel first, require a `local/scheduled`
+result, cancel when the task is done, keep payloads small, catch failures, and
+schedule while alive (see lifecycle gotcha above). Never cast an unsupported
+`"push"` channel. Local delivery does not prove multiplayer push or inbox.
 
 ## Stats (`RundotGameAPI.stats`, BETA)
 

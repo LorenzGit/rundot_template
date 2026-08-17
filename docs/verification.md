@@ -15,6 +15,40 @@ unverified.
 | Renderer, template, build, or dependency change | Full template checks and production builds |
 | Release or public repository preparation | Full checks, public audit, readiness review, and final visual evidence |
 
+## Node test targets must be dependency-free
+
+`scripts/test-*.ts` run under `node --experimental-strip-types`, outside Vite.
+Node resolves the real import graph, so importing a module that reaches the
+store, localization, or any asset pulls the whole graph in and fails before the
+first assertion:
+
+```text
+ERR_IMPORT_ATTRIBUTE_MISSING
+```
+
+The error names an import attribute and reads like a broken test runner. It is
+not. It means the module under test imports `strings.csv` — usually two or three
+hops away through `state/store.ts` — and Vite, not Node, is what normally
+resolves that.
+
+Do not work around it with a loader. Split the rules being tested into a sibling
+module with **no game imports**, and let the wiring live above it:
+
+| Layer | Imports | Tested by |
+| --- | --- | --- |
+| `systems/retention/returnReminders.ts` | nothing | `scripts/test-return-reminders.ts` |
+| `systems/retention/retentionConfig.ts` | store, SDK, analytics | browser and Playground |
+
+Games that ship a daily reward follow the same split — `restockStreak.ts` and
+`dailySpecialModel.ts` hold the ladder and streak math, while `dailyRestock.ts`
+and `dailySpecial.ts` hold the clock, the store writes, and the reminder kill
+switch.
+
+This is worth the extra file. The rules that are cheapest to get wrong and
+hardest to notice — calendar boundaries, streak forgiveness, cadence limits —
+end up in the layer a test can reach without a browser, and the layer that needs
+a host stays honest about needing one.
+
 ## Local visual review
 
 Development-only screen deep links avoid repetitive navigation:
@@ -65,6 +99,9 @@ and host-owned ad/checkout presentation still require Playground or device QA.
 Browser tests never prove a real ad, purchase, entitlement, notification,
 profile, or host capability. Verify those separately through the opt-in RUN
 Playground and the final RUN host, without fabricating successful outcomes.
+For notifications, follow [`notifications.md`](notifications.md): the Settings
+five-second probe proves only local device scheduling, while multiplayer push
+and inbox delivery require two identities and a disconnected receiver.
 
 ## Public repository audit
 

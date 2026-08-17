@@ -76,7 +76,10 @@ autoplay. These are browser features, not additional SDK namespaces.
 - RUN host daily claims require a successful server-time sample.
 - Local fallback enables development and is visibly non-authoritative.
 - Analytics never controls ownership, eligibility, or rewards.
-- Notification success is not assumed from a request; the host preference is read back and messages use the current `submitMessageAsync` API.
+- Notification success is not assumed from a request; the host preference is
+  read back and messages use the current `submitMessageAsync` API. The Settings
+  five-second test and multiplayer broker contract are documented in
+  [`notifications.md`](notifications.md).
 - Haptics are optional feedback and never the only feedback.
 - Haptics use root `triggerHapticAsync()` plus
   `system.getDevice().haptics`; there is no runtime `haptics` namespace in SDK

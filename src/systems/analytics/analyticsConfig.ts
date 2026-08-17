@@ -2,6 +2,7 @@ import { store } from "../../state/store.ts";
 import { recordAnalytics, recordFunnelStep } from "../../sdk/runSdk.ts";
 import packageJson from "../../../package.json";
 import { countedSteps, createAnalytics } from "./analytics.ts";
+import { saveSystem } from "../save.ts";
 
 /**
  * ADAPT: this is the game's funnel registry. Rename the steps to match the
@@ -10,7 +11,9 @@ import { countedSteps, createAnalytics } from "./analytics.ts";
  *   - `ftue` has AT LEAST three steps: loaded -> first action -> first
  *     completion. A one-step boot funnel proves the app loaded and nothing
  *     else; it cannot show where onboarding loses players, which is the only
- *     reason to have a funnel. Prefer more, finer steps over fewer coarse ones.
+ *     reason to have a funnel. Add detail only when every step is mandatory and
+ *     causally ordered. Optional screens and mutually exclusive purchase/ad
+ *     paths are custom events or separate funnels.
  *   - `ftue` is `onceEver` so replays cannot re-fire step 1 and flatten the
  *     curve. Correct instrumentation reads monotonically decreasing.
  *   - Step names and numbers are FROZEN once deployed. Add new steps at the
@@ -20,9 +23,9 @@ export const analytics = createAnalytics({
     emitEvent: (name, payload) => {
         void recordAnalytics(name, { ...payload, build_version: packageJson.version });
     },
-    emitFunnelStep: (step, name, funnel, order) => {
-        void recordFunnelStep(step, name, funnel, order);
-    },
+    // The promise is returned so once-ever marks persist only on confirmed
+    // delivery — recordFunnelStep resolves false on timeout or RPC failure.
+    emitFunnelStep: (step, name, funnel, order) => recordFunnelStep(step, name, funnel, order),
     funnels: {
         /**
          * The loading phase itself, ahead of `ftue` (order 0 vs 1).
@@ -79,5 +82,10 @@ export const analytics = createAnalytics({
         };
     },
     marksKey: "rundot_template_funnel_marks",
+    readOnceEverMarks: () => store.get().analyticsFunnelMarks,
+    writeOnceEverMarks: (marks) => {
+        store.patch({ analyticsFunnelMarks: marks.slice(-160) });
+        saveSystem.scheduleFlush();
+    },
     debug: import.meta.env.DEV,
 });

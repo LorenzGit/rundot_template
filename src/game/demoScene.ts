@@ -68,7 +68,13 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
     sprite.anchor.set(0.5);
     sprite.width = baseSize;
     sprite.height = baseSize;
-    const baseScale = sprite.scale.x;
+    // The generated frame texture is not square, so fitting both dimensions to
+    // baseSize leaves scale.x ≠ scale.y. Punch must scale RELATIVE to that pair
+    // — tweening a uniform scale.set() from scale.x permanently squashed the
+    // sprite ~11% on the first bounce.
+    const baseScaleX = sprite.scale.x;
+    const baseScaleY = sprite.scale.y;
+    const setPunchScale = (multiplier: number) => sprite.scale.set(baseScaleX * multiplier, baseScaleY * multiplier);
     sprite.x = stage.designWidth() / 2;
     sprite.y = stage.designHeight() / 2;
     sprite.animationSpeed = highQuality ? 0.12 : 0.07;
@@ -80,19 +86,26 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
     let vy = 240;
     let alive = true;
 
+    let punchMultiplier = 1;
     const punch = () => {
         if (reducedMotion) return;
         tweens.addTween(
-            (value) => sprite.scale.set(value),
-            sprite.scale.x,
-            baseScale * 1.14,
+            (value) => {
+                punchMultiplier = value;
+                setPunchScale(value);
+            },
+            punchMultiplier,
+            1.14,
             ease.outCubic,
             () => {
                 if (!alive) return;
                 tweens.addTween(
-                    (value) => sprite.scale.set(value),
-                    baseScale * 1.14,
-                    baseScale,
+                    (value) => {
+                        punchMultiplier = value;
+                        setPunchScale(value);
+                    },
+                    1.14,
+                    1,
                     ease.outBack,
                     undefined,
                     { durationMs: 180 },
@@ -187,8 +200,9 @@ export function createDemoScene(app: Application, stage: Stage): Scene {
         }
 
         if (bounced) {
-            const nextScore = store.get().score + 1;
-            store.patch({ score: nextScore });
+            const current = store.get();
+            const nextScore = current.score + 1;
+            store.patch({ score: nextScore, bestScore: Math.max(current.bestScore, nextScore) });
             recordDemoScore(nextScore);
             dailySystems.recordQuestProgress("bounces");
             audioManager.play("bounce");

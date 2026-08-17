@@ -3,7 +3,6 @@ import { saveSystem } from "../systems/save.ts";
 import { formatNumber, t } from "../systems/localization.ts";
 import { dailySystems } from "../systems/dailySystems.ts";
 import { startDemoLevel } from "../systems/demoAnalytics.ts";
-import { runtimeServices } from "../systems/runtimeServices.ts";
 import { store, useStore, type MenuScreen } from "../state/store.ts";
 
 type MenuIconName = "calendar" | "quests" | "shop" | "stats" | "run" | "settings";
@@ -80,7 +79,6 @@ export default function MainMenu() {
     // Click sound + haptic come from useButtonFeedback (App.tsx) — the
     // .play-button class maps to the heavier "start" cue there.
     const play = () => {
-        runtimeServices.funnel(2, "demo_started", "template_first_play", 1);
         store.patch({ phase: "playing", score: 0, totalPlays: store.get().totalPlays + 1 });
         startDemoLevel();
         dailySystems.recordQuestProgress("plays");
